@@ -1,0 +1,13 @@
+{
+    "default": {
+        "export": true,
+        "max_files": 2,
+        "delete_by": "version",
+        "version": "\\.(\\d+\\.\\d+\\.\\d+)\\."
+    },
+    "dirs": {
+        "test": {
+            "include": "zip"
+        }
+    }
+}
