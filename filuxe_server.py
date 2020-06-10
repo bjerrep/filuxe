@@ -12,7 +12,7 @@ def die(e, error_code):
     cri(f'caught exception {e}', error_code)
 
 
-parser = argparse.ArgumentParser('zyglot, a simple python cli template (with colored logging)')
+parser = argparse.ArgumentParser('filuxe_server')
 parser.add_argument('--verbose', action='store_true',
                     help='enable all messages (including flask)')
 parser.add_argument('--debug', action='store_true',

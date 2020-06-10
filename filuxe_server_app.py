@@ -1,9 +1,10 @@
+from log import deb, inf, war, cri
+from util import chunked_reader
 import os
-from flask import Flask, request, abort, jsonify, send_from_directory, safe_join, render_template
+from flask import Flask, request, abort, jsonify, send_from_directory, safe_join, render_template, Response, stream_with_context
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_restful import inputs
-from log import deb, inf, war, cri
 from errorcodes import ErrorCode
 from pathlib import Path
 from functools import wraps
@@ -43,7 +44,13 @@ def index():
 
 @app.route('/download/<path:path>')
 def get_file(path):
-    return send_from_directory(app.config['fileroot'], path, as_attachment=True)
+    filename = os.path.join(app.config['fileroot'], path)
+    if not os.path.getsize(filename):
+        return send_from_directory(app.config['fileroot'], path, as_attachment=True)
+    else:
+        return Response(stream_with_context(chunked_reader(filename)),
+                        headers={'Content-Disposition': f'attachment; filename={path}',
+                                 'Content-Type': 'application/octet-stream'})
 
 
 @app.route('/upload/<path:path>', methods=['POST'])
@@ -59,14 +66,16 @@ def route_upload(path):
         inf('constructing new path %s' % dir)
         Path(dir).mkdir(parents=True, exist_ok=True)
 
-    if os.path.exists(path):
+    range = request.environ['HTTP_CONTENT_RANGE']
+
+    if os.path.exists(path) and range and range.startswith('bytes 0-'):
         # Currently the server refuses to rewrite an existing file. Should be a configuration option.
         war(f'file {path} already exist')
         return '', 403
 
     inf(f'writing file {path}')
 
-    with open(path, "wb") as fp:
+    with open(path, "ab") as fp:
         fp.write(request.data)
     if time > 0.0:
         deb(f'setting {path} time to {time}')

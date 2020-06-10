@@ -12,7 +12,7 @@ def die(e, error_code):
     cri(f'caught exception {e}', error_code)
 
 
-parser = argparse.ArgumentParser('zyglot, a simple python cli template (with colored logging)')
+parser = argparse.ArgumentParser('filuxe')
 
 parser.add_argument('--upload', action='store_true',
                     help='upload file including optional (arbitrary) path')
@@ -58,13 +58,15 @@ if args.config:
 
 try:
     try:
+        lan = True
         file_root = cfg['lan_filestorage']
         inf('LAN filestorage root %s' % file_root)
     except KeyError:
+        lan = False
         file_root = cfg['wan_filestorage']
         inf('WAN filestorage root %s' % file_root)
 
-    filuxe = filuxe_api.Filuxe(cfg)
+    filuxe = filuxe_api.Filuxe(cfg, lan=lan)
 
     errorcode = ErrorCode.UNSET
 
@@ -77,6 +79,7 @@ try:
             errorcode = filuxe.delete(args.path)
         elif args.list:
             errorcode, list = filuxe.list(args.path, args.pretty, args.recursive)
+            print(list)
         else:
             cri('seems that you didnt really tell me what to do ?', ErrorCode.BAD_ARGUMENTS)
     except requests.exceptions.ConnectionError:
