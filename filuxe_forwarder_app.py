@@ -234,7 +234,7 @@ class Listener(FileSystemEventHandler):
     def on_deleted(self, event):
         path = os.path.relpath(event.src_path, file_root)
         if isinstance(event, FileDeletedEvent):
-            inf(f'deleted file {os.path.basename(path)} as {path}')
+            inf(f'deleted file {os.path.basename(path)} as {event.src_path}')
             delete_file(event.src_path, filuxe_wan)
         else:
             inf(f'deleted directory {path} (no action)')
@@ -294,7 +294,7 @@ def synchonize(cfg):
         inf('WAN server is up-to-date')
     else:
         inf(f'synchonizing: found {copy_bytes} bytes in {len(new_files)} new files '
-            'and {len(modified_files)} modified files')
+            f'and {len(modified_files)} modified files')
         for file in new_files + modified_files:
             export_file(os.path.join(file_root, file))
         inf('synchonizing: complete')
