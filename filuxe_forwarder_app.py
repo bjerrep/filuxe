@@ -234,13 +234,13 @@ class Listener(FileSystemEventHandler):
     def on_deleted(self, event):
         path = os.path.relpath(event.src_path, file_root)
         if isinstance(event, FileDeletedEvent):
-            inf(f'deleted file {os.path.basename(path)} as {event.src_path}')
-            delete_file(event.src_path, filuxe_wan)
+            inf(f'deleted file {path} as {event.src_path}')
+            delete_file(path, filuxe_wan)
         else:
             inf(f'deleted directory {path} (no action)')
 
 
-def run_watcher(root):
+def run_filesystem_observer(root):
     global observer
     observer = Observer()
     listener = Listener()
@@ -248,7 +248,6 @@ def run_watcher(root):
     observer.start()
     signal.signal(signal.SIGINT, terminate)
     signal.signal(signal.SIGTERM, terminate)
-    observer.join()
 
 
 def coldstart_rules():
@@ -326,5 +325,7 @@ def start(args, cfg, _rules):
     except:
         inf('not syncronizing, "sync_at_startup" not enabled')
 
-    run_watcher(file_root)
+    run_filesystem_observer(file_root)
+    print('filuxe forwarder is ready')
+    observer.join()
     return ErrorCode.OK

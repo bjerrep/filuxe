@@ -11,32 +11,35 @@ class Filuxe:
     def __init__(self, cfg, lan=True):
         self.certificate = False
         protocol = 'http://'
-        if lan:
-            try:
-                self.certificate = cfg['lan_certificate']
-                protocol = 'https://'
-            except:
-                pass
+        try:
+            if lan:
+                try:
+                    self.certificate = cfg['lan_certificate']
+                    protocol = 'https://'
+                except:
+                    pass
 
-            self.server = f'{protocol}{cfg["lan_host"]}:{cfg["lan_port"]}'
-            inf(f'filuxe LAN server is {self.server}')
-            self.file_root = cfg['lan_filestorage']
-            self.domain = 'LAN'
-        else:
-            try:
-                self.certificate = cfg['wan_certificate']
-                protocol = 'https://'
-            except:
-                pass
-
-            self.server = f'{protocol}{cfg["wan_host"]}:{cfg["wan_port"]}'
-            inf(f'filuxe WAN server is {self.server}')
-            try:
-                self.file_root = cfg['wan_filestorage']
-            except:
-                # its the forwarder that runs here...
+                self.server = f'{protocol}{cfg["lan_host"]}:{cfg["lan_port"]}'
+                inf(f'filuxe LAN server is {self.server}')
                 self.file_root = cfg['lan_filestorage']
-            self.domain = 'WAN'
+                self.domain = 'LAN'
+            else:
+                try:
+                    self.certificate = cfg['wan_certificate']
+                    protocol = 'https://'
+                except:
+                    pass
+
+                self.server = f'{protocol}{cfg["wan_host"]}:{cfg["wan_port"]}'
+                inf(f'filuxe WAN server is {self.server}')
+                try:
+                    self.file_root = cfg['wan_filestorage']
+                except:
+                    # its the forwarder that runs here...
+                    self.file_root = cfg['lan_filestorage']
+                self.domain = 'WAN'
+        except KeyError as e:
+            cri(f'expected a {e} entry in the configuration file', ErrorCode.MISSING_KEY)
         try:
             self.write_key = cfg['wan_write_key']
         except:

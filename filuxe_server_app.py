@@ -66,17 +66,30 @@ def route_upload(path):
         inf('constructing new path %s' % dir)
         Path(dir).mkdir(parents=True, exist_ok=True)
 
-    range = request.environ['HTTP_CONTENT_RANGE']
+    try:
+        # chunked upload
+        range = request.environ['HTTP_CONTENT_RANGE']
 
-    if os.path.exists(path) and range and range.startswith('bytes 0-'):
-        # Currently the server refuses to rewrite an existing file. Should be a configuration option.
-        war(f'file {path} already exist')
-        return '', 403
+        if os.path.exists(path) and range and range.startswith('bytes 0-'):
+            # Currently the server refuses to rewrite an existing file. Should be a configuration option.
+            war(f'file {path} already exist')
+            return '', 403
 
-    inf(f'writing file {path}')
+        inf(f'writing file {path}')
 
-    with open(path, "ab") as fp:
-        fp.write(request.data)
+        with open(path, "ab") as fp:
+            fp.write(request.data)
+    except:
+        if os.path.exists(path):
+            # Currently the server refuses to rewrite an existing file. Should be a configuration option.
+            war(f'file {path} already exist')
+            return '', 403
+
+        inf(f'writing file {path}')
+
+        with open(path, "wb") as fp:
+            fp.write(request.data)
+
     if time > 0.0:
         deb(f'setting {path} time to {time}')
         os.utime(path, (time, time))
@@ -89,10 +102,11 @@ def route_upload(path):
 @require_write_key
 def route_delete(path):
     path = safe_join(os.path.join(app.config['fileroot'], path))
-    inf('deleting %s' % path)
     try:
         os.remove(path)
+        inf('deleting %s' % path)
     except OSError:
+        inf('failure while deleting %s' % path)
         return '', 404
     return '', 200
 
@@ -120,6 +134,12 @@ def list_files(path):
 
     result = {'files': files, 'directories': directories}
     return jsonify(result)
+
+
+@app.route('/api/<path:path>')
+def get_server_status(path):
+    if path == 'status':
+        return jsonify({'status': 'ready'})
 
 
 def start(args, cfg):

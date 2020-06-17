@@ -15,7 +15,7 @@ def die(e, error_code):
 parser = argparse.ArgumentParser('filuxe')
 
 parser.add_argument('--upload', action='store_true',
-                    help='upload file including optional (arbitrary) path')
+                    help='upload file with destination path and name given by --path')
 parser.add_argument('--download', action='store_true',
                     help='download file')
 parser.add_argument('--delete', action='store_true',
@@ -28,7 +28,7 @@ parser.add_argument('--recursive', action='store_true',
 parser.add_argument('--file',
                     help='local file to save or upload')
 parser.add_argument('--path', default='/',
-                    help='server path for list')
+                    help='path for --list or path and filename for all other commands')
 parser.add_argument('--touch', action='store_true',
                     help='set the uploaded file timestamp to now. Default is to keep the original timestamp')
 

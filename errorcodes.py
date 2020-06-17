@@ -11,6 +11,7 @@ class ErrorCode(Enum):
     FILE_INVALID = 6
     FILE_ALREADY_EXIST = 7
     BAD_ARGUMENTS = 8
+    MISSING_KEY = 9
 
     @staticmethod
     def to_string(error_code):
@@ -23,7 +24,8 @@ class ErrorCode(Enum):
              'File not found',
              'File invalid',
              'File already exist',
-             'Bad arguments'
+             'Bad arguments',
+             'Missing key'
              ]
 
         return error_code_strings[error_code]
