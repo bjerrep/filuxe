@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import unittest, json, os, pexpect, time, shutil, pathlib
+import unittest, json, os, pexpect, time, shutil, pathlib, requests
 
 TEST_DIR = 'test'
 LAN_CONFIG = os.path.join(TEST_DIR, 'test_lan_config.json')
@@ -7,6 +7,14 @@ WAN_CONFIG = os.path.join(TEST_DIR, 'test_wan_config.json')
 FORWARDER_CONFIG = os.path.join(TEST_DIR, 'test_forwarder_config.json')
 FORWARDER_RULES = os.path.join(TEST_DIR, 'test_forwarder_rules.json')
 TIMEOUT = 2
+
+
+def deb(message):
+    print(message)
+
+
+def fat(message):
+    print(message)
 
 
 def write_lan_config():
@@ -81,12 +89,15 @@ class TestStringMethods(unittest.TestCase):
         while not ready and attempts:
             try:
                 if lan:
-                    _ = pexpect.spawn(f'curl http://{config["lan_host"]}:{config["lan_port"]}/api/status')
+                    r = requests.get(f'http://{config["lan_host"]}:{config["lan_port"]}/api/status')
                 else:
-                    _ = pexpect.spawn(f'curl https://{config["wan_host"]}:{config["wan_port"]}/api/status --insecure')
-                _.expect('{"status":"ready"}', timeout=TIMEOUT)
-                ready = True
-            except:
+                    r = requests.get(f'https://{config["wan_host"]}:{config["wan_port"]}/api/status', verify=False)
+                if r.status_code == 200:
+                    ready = True
+                else:
+                    time.sleep(0.1)
+                    attempts -= 1
+            except requests.ConnectionError:
                 time.sleep(0.1)
                 attempts -= 1
         return attempts

@@ -3,3 +3,4 @@ Flask-HTTPAuth
 watchdog
 pexpect
 pathlib
+requests
