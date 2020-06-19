@@ -1,5 +1,6 @@
 Flask
 Flask-HTTPAuth
+flask_restful
 watchdog
 pexpect
 pathlib
