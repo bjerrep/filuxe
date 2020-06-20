@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import unittest, json, os, pexpect, time, shutil, pathlib, requests
+import unittest, json, os, pexpect, time, shutil, pathlib, requests, sys
 
 TEST_DIR = 'test'
 LAN_CONFIG = os.path.join(TEST_DIR, 'test_lan_config.json')
@@ -91,6 +91,8 @@ class TestStringMethods(unittest.TestCase):
                 if lan:
                     r = requests.get(f'http://{config["lan_host"]}:{config["lan_port"]}/api/status')
                 else:
+                    # launch this test script with PYTHONWARNINGS="ignore:Unverified HTTPS request" to ignore
+                    # the warning about the lacking SSL verification.
                     r = requests.get(f'https://{config["wan_host"]}:{config["wan_port"]}/api/status', verify=False)
                 if r.status_code == 200:
                     ready = True
@@ -107,8 +109,9 @@ class TestStringMethods(unittest.TestCase):
             shutil.rmtree(TEST_DIR)
         try:
             os.mkdir(TEST_DIR)
-        except:
-            pass
+        except Exception as e:
+            fat(f'could not make test dir {e}')
+            raise e
 
         self.lan_config = write_lan_config()
         self.wan_config = write_wan_config()
@@ -116,17 +119,22 @@ class TestStringMethods(unittest.TestCase):
         write_forwarder_rules()
 
         if True:
-            self.lan_server = pexpect.spawn(f'./filuxe_server.py --config {LAN_CONFIG}')
+            self.lan_server = pexpect.spawn(f'./filuxe_server.py --config {LAN_CONFIG} --verbose', encoding='utf-8')
+            self.lan_server.logfile = sys.stdout
             ready = self.wait_for_server(self.lan_config, lan=True)
             self.assertTrue(ready)
 
         if True:
-            self.wan_server = pexpect.spawn(f'./filuxe_server.py --config {WAN_CONFIG} --debug')
+            self.wan_server = pexpect.spawn(f'./filuxe_server.py --config {WAN_CONFIG} --verbose', encoding='utf-8')
+            self.wan_server.logfile = sys.stdout
             ready = self.wait_for_server(self.wan_config, lan=False)
             self.assertTrue(ready)
 
         if True:
-            self.forwarder = pexpect.spawn(f'./filuxe_forwarder.py --config {FORWARDER_CONFIG} --rules {FORWARDER_RULES}')
+            self.forwarder = \
+                pexpect.spawn(f'./filuxe_forwarder.py --config {FORWARDER_CONFIG} --verbose --rules {FORWARDER_RULES} --verbose',
+                              encoding='utf-8')
+            self.forwarder.logfile = sys.stdout
             self.forwarder.expect('filuxe forwarder is ready')
 
     def tearDown(self):
