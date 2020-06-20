@@ -120,13 +120,13 @@ class TestStringMethods(unittest.TestCase):
 
         if True:
             self.lan_server = pexpect.spawn(f'./filuxe_server.py --config {LAN_CONFIG} --verbose', encoding='utf-8')
-            self.lan_server.logfile = sys.stdout
+            self.lan_server.logfile = sys.stderr
             ready = self.wait_for_server(self.lan_config, lan=True)
             self.assertTrue(ready)
 
         if True:
             self.wan_server = pexpect.spawn(f'./filuxe_server.py --config {WAN_CONFIG} --verbose', encoding='utf-8')
-            self.wan_server.logfile = sys.stdout
+            self.wan_server.logfile = sys.stderr
             ready = self.wait_for_server(self.wan_config, lan=False)
             self.assertTrue(ready)
 
@@ -134,7 +134,7 @@ class TestStringMethods(unittest.TestCase):
             self.forwarder = \
                 pexpect.spawn(f'./filuxe_forwarder.py --config {FORWARDER_CONFIG} --verbose --rules {FORWARDER_RULES} --verbose',
                               encoding='utf-8')
-            self.forwarder.logfile = sys.stdout
+            self.forwarder.logfile = sys.stderr
             self.forwarder.expect('filuxe forwarder is ready')
 
     def tearDown(self):
