@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import unittest, json, os, pexpect, time, shutil, pathlib, requests, sys
+import unittest, json, os, pexpect, time, shutil, pathlib, requests, sys, io, contextlib
 
 TEST_DIR = 'test'
 LAN_CONFIG = os.path.join(TEST_DIR, 'test_lan_config.json')
@@ -171,4 +171,9 @@ class TestStringMethods(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    import __main__
+    buf = io.StringIO()
+    suite = unittest.TestLoader().loadTestsFromModule(__main__)
+    with contextlib.redirect_stdout(buf):
+        unittest.TextTestRunner(stream=buf).run(suite)
+    print(buf.getvalue())
