@@ -41,7 +41,7 @@ def write_wan_config():
         "wan_filestorage": f"{TEST_DIR}/filestorage_wan",
         "wan_host": "localhost",
         "wan_port": 9000,
-        "wan_write_key": "devel",
+        "write_key": "devel",
         "wan_certificate": "certificates/cert.pem.devel",
         "certificates": ["certificates/cert.pem.devel", "certificates/key.pem.devel"],
         "username": "name",
@@ -63,7 +63,7 @@ def write_forwarder_config():
         "wan_host": "localhost",
         "wan_port": 9000,
         "wan_certificate": "certificates/cert.pem.devel",
-        "wan_write_key": "devel"
+        "write_key": "devel"
     }
     with open(FORWARDER_CONFIG, 'w') as f:
         f.write(json.dumps(config))
