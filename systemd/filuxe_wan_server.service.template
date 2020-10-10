@@ -1,0 +1,14 @@
+[Unit]
+Description=filuxe WAN server
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=<user>
+WorkingDirectory=<git root>
+ExecStart=<git root>/filuxe_server.py --config config_wan.json
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
