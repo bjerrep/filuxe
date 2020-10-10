@@ -14,6 +14,7 @@ Finally files are uploaded via HTTP from the fictive buildserver to the LAN webs
 
 Before starting then make local copies of the three configuration files config_lan, config_wan and config_forwarder.json.template where the .template extension is stripped. Finally make a local copy of the file rules.json.template as well.
 
+Also have a look at :doc:`installing </installing>` to get the dependencies installed.
 
 LAN Webserver
 =============
@@ -35,7 +36,9 @@ WAN Server
 
 Obviously the WAN web server will run on an internet connected server somewhere but here it is just started alongside everything else on the local PC. The web server application itself is the same for both LAN and WAN server.
 
-Make a WAN filestorage as /opt/filestorage_wan like it was done for the LAN web server filestorage and then start the server::
+Since the WAN server will use HTTPS then make a certificates directory and generate the needed SSL keys with a :doc:`openssh oneliner </keysandcertificates>`.
+
+Next make a WAN filestorage as /opt/filestorage_wan like it was done for the LAN web server filestorage and then start the server::
 
     ./filuxe_server.py --config config_wan.json
 
@@ -83,7 +86,7 @@ Check that it got mirrored:::
 
 It were! Now delete the file /opt/filestorage_lan/direct.zip again and watch that the file dissapears from /opt/filestorage_wan/. So far so good.
 
-The problem is that real life buildserver(s) (or whatever the producers are) most likely have no direct access to the filestorage on the LAN server filesystem. They should instead use the script filuxe.py which is a utility for managing the LAN filestorage via HTTP inside the LAN.
+The problem is that real life buildserver(s) (or whatever the producers are) might have no direct access to the filestorage on the LAN server filesystem. They should instead use the script filuxe.py which is a utility for managing the LAN filestorage via HTTP inside the LAN.
 
 Make a dummy test file::
 
@@ -114,6 +117,8 @@ Which gives:
     }
 
 
-The net result of the whole exercise to this point is that the file was ultimately saved on the WAN fileserver. Whats left is now that some products or endusers will download files as they see fit. How they do that is not considered part of the filuxe project. They will have to manage HTTP file downloads in whatever way they see fit.
+The net result of the whole exercise to this point is that the file was ultimately saved on the WAN fileserver. Whats left is now that some products or endusers will download files as they see fit. How they do that is not considered part of the filuxe project.
+
+
 
 

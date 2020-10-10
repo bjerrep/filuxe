@@ -8,11 +8,15 @@ Filuxe
    :caption: Contents:
 
    aquickspin
+   filuxe_script
    forwarder
    webserver
    webserver_direct_http
    keysandcertificates
+   filebrowser
    installing
+   deployment
+
 
 Filuxe
 ======

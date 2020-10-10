@@ -7,11 +7,15 @@ Installing
 Dependencies
 ============
 
+A couple of python libraries are required. Python version needs to be 3.6+. If installing on ubuntu then 18.04 or above is the best starting point, then the 'python-' part should be 'python3-'.
+
 ::
 
     python-watchdog
     python-flask
     python-flask-httpauth
+
+    ubuntu 18.04 flask-restful (pip)
 
 
 Reading
