@@ -4,4 +4,4 @@ python:
 install:
     pip install -r requirements.txt
 script:
-  - PYTHONWARNINGS="ignore:Unverified HTTPS request" python -u ./test.py 1>&2
+  - PYTHONWARNINGS="ignore:Unverified HTTPS request" python -u ./livetest.py 1>&2
