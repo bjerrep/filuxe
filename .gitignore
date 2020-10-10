@@ -3,4 +3,5 @@ __pycache__
 doc/_build
 
 *.json
+*.bak
 certificates

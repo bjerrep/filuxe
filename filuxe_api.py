@@ -8,11 +8,13 @@ warnings.simplefilter('ignore', urllib3.exceptions.SecurityWarning)
 
 
 class Filuxe:
-    def __init__(self, cfg, lan=True):
+    def __init__(self, cfg, lan=True, force=False):
         self.certificate = False
         protocol = 'http://'
+        self.force = force
         try:
             if lan:
+                self.domain = 'LAN'
                 try:
                     self.certificate = cfg['lan_certificate']
                     protocol = 'https://'
@@ -21,9 +23,10 @@ class Filuxe:
 
                 self.server = f'{protocol}{cfg["lan_host"]}:{cfg["lan_port"]}'
                 inf(f'filuxe LAN server is {self.server}')
-                self.file_root = cfg['lan_filestorage']
-                self.domain = 'LAN'
+                self.file_root = cfg.get('lan_filestorage')
+
             else:
+                self.domain = 'WAN'
                 try:
                     self.certificate = cfg['wan_certificate']
                     protocol = 'https://'
@@ -35,13 +38,14 @@ class Filuxe:
                 try:
                     self.file_root = cfg['wan_filestorage']
                 except:
-                    # its the forwarder that runs here...
+                    inf('loading forwarder configuration')
                     self.file_root = cfg['lan_filestorage']
-                self.domain = 'WAN'
+
         except KeyError as e:
             cri(f'expected a {e} entry in the configuration file', ErrorCode.MISSING_KEY)
+
         try:
-            self.write_key = cfg['wan_write_key']
+            self.write_key = cfg['write_key']
         except:
             self.write_key = ''
 
@@ -56,7 +60,7 @@ class Filuxe:
             cri('local file already exists, bailing out', ErrorCode.FILE_ALREADY_EXIST)
         return ErrorCode.OK
 
-    def upload(self, filename, path=None, touch=False):
+    def upload(self, filename, path=None, touch=False, force=False):
         if not path:
             path = filename
 
@@ -65,8 +69,11 @@ class Filuxe:
         else:
             epoch = os.path.getatime(filename)
 
+        if self.force:
+            force = True
+
         size = os.path.getsize(filename)
-        deb(f'uploading {filename} {size/1024} kb to server as {path}')
+        deb(f'uploading {filename} {size:,} bytes to server as {path}')
         index = 0
         offset = 0
 
@@ -74,7 +81,7 @@ class Filuxe:
             response = requests.post('{}/upload/{}'.format(self.server, path),
                                      headers={'key': self.write_key},
                                      data='',
-                                     params={'time': epoch},
+                                     params={'time': epoch, 'force': force},
                                      verify=self.certificate)
         else:
             try:
@@ -86,7 +93,7 @@ class Filuxe:
                                                       'Content-length': str(size),
                                                       'Content-Range': 'bytes %s-%s/%s' % (index, offset, size)},
                                              data=chunk,
-                                             params={'time': epoch},
+                                             params={'time': epoch, 'force': force},
                                              verify=self.certificate)
                     index = offset
             except Exception as e:
@@ -95,6 +102,8 @@ class Filuxe:
         try:
             if response.status_code == 201:
                 return ErrorCode.OK
+            if response.status_code == 403:
+                return ErrorCode.FILE_ALREADY_EXIST
         except:
             pass
         return ErrorCode.SERVER_ERROR

@@ -77,6 +77,6 @@ def err(msg):
 
 
 def cri(msg, exit_code):
-    logger.critical(f'{indent}{msg}')
-    logger.critical(f'{indent}now exiting due to critical error \'{ErrorCode.to_string(exit_code.value)}\'')
+    logger.critical(f'{msg} {exit_code}')
+    logger.critical(f'now exiting due to critical error \'{ErrorCode.to_string(exit_code.value)}\'')
     exit(exit_code.value)

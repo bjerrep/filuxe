@@ -15,22 +15,25 @@ def die(e, error_code):
 parser = argparse.ArgumentParser('filuxe')
 
 parser.add_argument('--upload', action='store_true',
-                    help='upload file with destination path and name given by --path')
+                    help='upload file given by --file with destination path and name given by --path. See --force')
 parser.add_argument('--download', action='store_true',
                     help='download file')
 parser.add_argument('--delete', action='store_true',
                     help='delete file given by --path')
 parser.add_argument('--list', action='store_true',
-                    help='get file list')
+                    help='get file list. See --pretty and --recursive')
 
 parser.add_argument('--recursive', action='store_true',
                     help='get recursive --list')
 parser.add_argument('--file',
                     help='local file to save or upload')
-parser.add_argument('--path', default='/',
-                    help='path for --list or path and filename for all other commands')
+parser.add_argument('--path', default='.',
+                    help='path for --list (optional) or path and filename for all other commands')
 parser.add_argument('--touch', action='store_true',
-                    help='set the uploaded file timestamp to now. Default is to keep the original timestamp')
+                    help='set the uploaded file timestamp to server time. Default is to keep the original timestamp')
+parser.add_argument('--force', action='store_true',
+                    help='allow a --upload to rewrite an existing file (which is default illegal)')
+
 
 parser.add_argument('--verbose', action='store_true',
                     help='enable debug messages')
@@ -57,14 +60,7 @@ if args.config:
         die(e, ErrorCode.FILE_INVALID)
 
 try:
-    try:
-        lan = True
-        file_root = cfg['lan_filestorage']
-        inf('LAN filestorage root %s' % file_root)
-    except KeyError:
-        lan = False
-        file_root = cfg['wan_filestorage']
-        inf('WAN filestorage root %s' % file_root)
+    lan = cfg.get('lan_host')
 
     filuxe = filuxe_api.Filuxe(cfg, lan=lan)
 
@@ -74,7 +70,7 @@ try:
         if args.download:
             errorcode = filuxe.download(args.file, args.path)
         elif args.upload:
-            errorcode = filuxe.upload(args.file, args.path, args.touch)
+            errorcode = filuxe.upload(args.file, args.path, args.touch, args.force)
         elif args.delete:
             errorcode = filuxe.delete(args.path)
         elif args.list:
@@ -86,7 +82,7 @@ try:
         cri('Connection refused, server might be offline?', ErrorCode.SERVER_ERROR)
 
     if errorcode != ErrorCode.OK:
-        cri('critical message', errorcode)
+        cri('operation failed with', errorcode)
 
 except Exception as e:
     die(e, ErrorCode.UNHANDLED_EXCEPTION)

@@ -57,6 +57,7 @@ def get_file(path):
 @require_write_key
 def route_upload(path):
     time = request.args.get('time', type=float, default=0.0)
+    force = request.args.get('force', type=inputs.boolean, default=False)
     path = safe_join(os.path.join(app.config['fileroot'], path))
     if path is None:
         abort(404)
@@ -71,17 +72,19 @@ def route_upload(path):
         range = request.environ['HTTP_CONTENT_RANGE']
 
         if os.path.exists(path) and range and range.startswith('bytes 0-'):
-            # Currently the server refuses to rewrite an existing file. Should be a configuration option.
-            war(f'file {path} already exist')
-            return '', 403
+            if force:
+                open(path, 'w').close()
+            else:
+                # if force was not given then the default is that the server refuses to rewrite an existing file
+                war(f'file {path} already exist')
+                return '', 403
 
         inf(f'writing file {path}')
 
         with open(path, "ab") as fp:
             fp.write(request.data)
     except:
-        if os.path.exists(path):
-            # Currently the server refuses to rewrite an existing file. Should be a configuration option.
+        if not force:
             war(f'file {path} already exist')
             return '', 403
 
@@ -94,7 +97,7 @@ def route_upload(path):
         deb(f'setting {path} time to {time}')
         os.utime(path, (time, time))
 
-    # Created
+    # 201: Created
     return '', 201
 
 
@@ -132,7 +135,7 @@ def list_files(path):
         if not recursive:
             break
 
-    result = {'files': files, 'directories': directories}
+    result = {'serverpath': path, 'files': files, 'directories': directories}
     return jsonify(result)
 
 
@@ -174,7 +177,7 @@ def start(args, cfg):
     app.secret_key = os.urandom(50)
     app.name = f'filuxe_server_{realm}'
     try:
-        app.config['writekey'] = cfg['wan_write_key']
+        app.config['writekey'] = cfg['write_key']
     except:
         app.config['writekey'] = ''
 

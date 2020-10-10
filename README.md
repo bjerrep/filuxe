@@ -18,4 +18,12 @@ Filuxe has absolutely no built in security of any kind so it is only useful if t
 
 With encrypted files during transport the products will always be able to detect invalid files and be able to  reject them. There is the secondary security issue which will be to protect the WAN webserver from the bad people. Not that the bad people will be able to get the products to install something hacked, but simply the nuisance it will be if say a firmware update service is disrupted. This is about hardening internet servers which is definitely beyond the scope of this project. 
 
-There are more documentation [here](https://filuxe.readthedocs.io/en/latest/) with among others 'a quick spin' page.
+
+
+To verify that filuxe currently works at all then run the livetest script:
+
+`PYTHONUNBUFFERED=1 ./livetest.py`
+
+
+
+There are more documentation [here](https://filuxe.readthedocs.io/en/latest/) with among others 'a quick spin' page (which is a diy livetest).

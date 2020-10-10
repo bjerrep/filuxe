@@ -1,7 +1,7 @@
 from log import deb, inf, war
 from errorcodes import ErrorCode
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileDeletedEvent
+from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileDeletedEvent, FileModifiedEvent
 import requests
 import filuxe_api
 import os, copy, re, signal, time
@@ -29,7 +29,7 @@ def get_files(filuxe_handle, path='/', recursive=True):
     try:
         errorcode, lan_list = filuxe_handle.list(path, recursive=recursive)
         lan_files = lan_list['files']
-        deb(lan_files)
+        deb('lan files: ' + str(lan_files))
         return lan_files
     except requests.ConnectionError:
         war(f'unable to get file list from {filuxe_handle.domain}, server unreachable')
@@ -222,7 +222,7 @@ class Listener(FileSystemEventHandler):
     def on_created(self, event):
         src_path = os.path.relpath(event.src_path, file_root)
         path = os.path.dirname(src_path)
-        if isinstance(event, FileCreatedEvent):
+        if isinstance(event, FileCreatedEvent) or isinstance(event, FileModifiedEvent):
             inf(f'new file {os.path.basename(src_path)} as {src_path}')
             calculate_rules([path, ])
             export_file(event.src_path)
@@ -230,6 +230,9 @@ class Listener(FileSystemEventHandler):
         else:
             inf(f'new directory {src_path} (no action)')
             calculate_rules([src_path, ])
+
+    def on_modified(self, event):
+        self.on_created(event)
 
     def on_deleted(self, event):
         path = os.path.relpath(event.src_path, file_root)
@@ -314,7 +317,7 @@ def start(args, cfg, _rules):
     file_root = cfg['lan_filestorage']
     inf('filestorage root %s' % file_root)
 
-    filuxe_wan = filuxe_api.Filuxe(config, lan=False)
+    filuxe_wan = filuxe_api.Filuxe(config, lan=False, force=True)
     filuxe_lan = filuxe_api.Filuxe(config, lan=True)
 
     coldstart_rules()

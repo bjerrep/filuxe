@@ -6,10 +6,15 @@ LAN_CONFIG = os.path.join(TEST_DIR, 'test_lan_config.json')
 WAN_CONFIG = os.path.join(TEST_DIR, 'test_wan_config.json')
 FORWARDER_CONFIG = os.path.join(TEST_DIR, 'test_forwarder_config.json')
 FORWARDER_RULES = os.path.join(TEST_DIR, 'test_forwarder_rules.json')
-TIMEOUT = 2
+TIMEOUT = 5
+WRITE_DELAY = 1
 
 
 def deb(message):
+    print(message)
+
+
+def rel(message):
     print(message)
 
 
@@ -105,6 +110,10 @@ class TestStringMethods(unittest.TestCase):
         return attempts
 
     def setUp(self):
+        name = str(self).split()[0]
+        rel('\n--------------------------------------------------------------')
+        rel(name)
+        rel('--------------------------------------------------------------')
         if os.path.exists(TEST_DIR):
             shutil.rmtree(TEST_DIR)
         try:
@@ -119,23 +128,28 @@ class TestStringMethods(unittest.TestCase):
         write_forwarder_rules()
 
         if True:
+            rel('----------- starting LAN server ----------')
             self.lan_server = pexpect.spawn(f'./filuxe_server.py --config {LAN_CONFIG} --verbose', encoding='utf-8')
             self.lan_server.logfile = sys.stderr
             ready = self.wait_for_server(self.lan_config, lan=True)
             self.assertTrue(ready)
 
         if True:
+            rel('----------- starting WAN server ----------')
             self.wan_server = pexpect.spawn(f'./filuxe_server.py --config {WAN_CONFIG} --verbose', encoding='utf-8')
             self.wan_server.logfile = sys.stderr
             ready = self.wait_for_server(self.wan_config, lan=False)
             self.assertTrue(ready)
 
         if True:
+            rel('----------- starting forwarder ----------')
             self.forwarder = \
                 pexpect.spawn(f'./filuxe_forwarder.py --config {FORWARDER_CONFIG} --verbose --rules {FORWARDER_RULES} --verbose',
                               encoding='utf-8')
             self.forwarder.logfile = sys.stderr
             self.forwarder.expect('filuxe forwarder is ready')
+
+        rel(f'----------- setup ready ------- {name} ----------')
 
     def tearDown(self):
         self.lan_server.close()
@@ -145,14 +159,20 @@ class TestStringMethods(unittest.TestCase):
 
     def test_a_quick_spin_direct_file(self):
         # write a file directly into lan filestorage and verify that it appears in wan filestorage
-        write_file(os.path.join(self.lan_config['lan_filestorage'], 'direct_write'), 'test')
+        lan_file = os.path.join(self.lan_config['lan_filestorage'], 'direct_write')
+        write_file(lan_file, 'test')
+        # wait for the wan server to make the write
         self.wan_server.expect('writing file test/filestorage_wan/direct_write', timeout=TIMEOUT)
-        self.assertTrue(os.path.exists(os.path.join(self.wan_config['wan_filestorage'], 'direct_write')))
+        wan_file = os.path.join(self.wan_config['wan_filestorage'], 'direct_write')
 
+        time.sleep(WRITE_DELAY)
+        self.assertTrue(os.path.exists(wan_file))
         # - and then delete the file from lan filestorage and verify that it disappears from wan filestorage
-        os.remove(os.path.join(self.lan_config['lan_filestorage'], 'direct_write'))
+        os.remove(lan_file)
         self.wan_server.expect('deleting test/filestorage_wan/direct_write', timeout=TIMEOUT)
-        self.assertFalse(os.path.exists(os.path.join(self.wan_config['wan_filestorage'], 'direct_write')))
+
+        time.sleep(WRITE_DELAY)
+        self.assertFalse(os.path.exists(wan_file))
 
     def test_a_quick_spin_filuxe_access(self):
         # upload a local file to lan filestorage via http via the filuxe script
@@ -161,8 +181,10 @@ class TestStringMethods(unittest.TestCase):
         dest_file = 'testpath/upload'
         pexpect.run(f'./filuxe.py --config {LAN_CONFIG} --path {dest_file} --file {source_file} --touch --upload')
         self.wan_server.expect('writing file test/filestorage_wan/testpath/upload', timeout=TIMEOUT)
+        time.sleep(WRITE_DELAY)
         self.assertTrue(os.path.exists(os.path.join(self.wan_config['wan_filestorage'], dest_file)))
         os.remove(source_file)
+        time.sleep(WRITE_DELAY)
         self.assertFalse(os.path.exists(source_file))
 
         # and then download the file from the wan server (typically expected to be a wget from products instead)
@@ -172,6 +194,7 @@ class TestStringMethods(unittest.TestCase):
 
 if __name__ == '__main__':
     import __main__
+    unittest.main(failfast=True)
     buf = io.StringIO()
     suite = unittest.TestLoader().loadTestsFromModule(__main__)
     with contextlib.redirect_stdout(buf):
