@@ -3,5 +3,6 @@ python:
   - "3.8"
 install:
     pip install -r requirements.txt
+  - openssl
 script:
   - PYTHONWARNINGS="ignore:Unverified HTTPS request" python -u ./livetest.py 1>&2

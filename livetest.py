@@ -42,8 +42,8 @@ def write_wan_config():
         "wan_host": "localhost",
         "wan_port": 9000,
         "write_key": "devel",
-        "wan_certificate": "certificates/cert.pem.devel",
-        "certificates": ["certificates/cert.pem.devel", "certificates/key.pem.devel"],
+        "wan_certificate": f"{TEST_DIR}/certificates/cert.pem.devel",
+        "certificates": [f"{TEST_DIR}/certificates/cert.pem.devel", f"{TEST_DIR}/certificates/key.pem.devel"],
         "username": "name",
         "password": "pwd"
     }
@@ -62,7 +62,8 @@ def write_forwarder_config():
         "lan_port": 8000,
         "wan_host": "localhost",
         "wan_port": 9000,
-        "wan_certificate": "certificates/cert.pem.devel",
+        "wan_certificate": f"{TEST_DIR}/certificates/cert.pem.devel",
+        "certificates": [f"{TEST_DIR}/certificates/cert.pem.devel", f"{TEST_DIR}/certificates/key.pem.devel"],
         "write_key": "devel"
     }
     with open(FORWARDER_CONFIG, 'w') as f:
@@ -78,6 +79,15 @@ def write_forwarder_rules():
         f.write(json.dumps(rules))
 
     return rules
+
+
+def generate_certificates():
+    cert_dir = '%s/certificates' % TEST_DIR
+    os.makedirs(cert_dir, exist_ok=True)
+    os.chdir(cert_dir)
+    os.system('openssl req -x509 -newkey rsa:4096 -nodes -out cert.pem.devel -keyout key.pem.devel -days 365'
+              ' -subj "/C=US/ST=NY/L=New York/O=Foo Corp/OU=Bar Div/CN=localhost"')
+    os.chdir('../..')
 
 
 def write_file(filename, content):
@@ -126,6 +136,7 @@ class TestStringMethods(unittest.TestCase):
         self.wan_config = write_wan_config()
         self.forwarder_config = write_forwarder_config()
         write_forwarder_rules()
+        generate_certificates()
 
         if True:
             rel('----------- starting LAN server ----------')
