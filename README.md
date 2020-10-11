@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.org/bjerrep/filuxe.svg?branch=master)](https://travis-ci.org/bjerrep/filuxe)
 
 
 # Filuxe
