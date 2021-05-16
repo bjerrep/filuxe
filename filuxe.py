@@ -21,14 +21,16 @@ parser.add_argument('--download', action='store_true',
 parser.add_argument('--delete', action='store_true',
                     help='delete file given by --path')
 parser.add_argument('--list', action='store_true',
-                    help='get file list. See --pretty and --recursive')
+                    help='get list of files and directories as json. See --pretty and --recursive')
+parser.add_argument('--filelist', action='store_true',
+                    help='get raw list of files. See --recursive')
 
 parser.add_argument('--recursive', action='store_true',
                     help='get recursive --list')
 parser.add_argument('--file',
                     help='local file to save or upload')
 parser.add_argument('--path', default='.',
-                    help='path for --list (optional) or path and filename for all other commands')
+                    help='path for --list/--filelist (optional) or path and filename for all other commands')
 parser.add_argument('--touch', action='store_true',
                     help='set the uploaded file timestamp to server time. Default is to keep the original timestamp')
 parser.add_argument('--force', action='store_true',
@@ -76,6 +78,10 @@ try:
         elif args.list:
             errorcode, list = filuxe.list(args.path, args.pretty, args.recursive)
             print(list)
+        elif args.filelist:
+            errorcode, file_list = filuxe.list_files(args.path, args.recursive)
+            for name in file_list:
+                print(name)
         else:
             cri('seems that you didnt really tell me what to do ?', ErrorCode.BAD_ARGUMENTS)
     except requests.exceptions.ConnectionError:

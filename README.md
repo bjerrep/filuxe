@@ -28,3 +28,9 @@ To verify that filuxe currently works at all then run the livetest script:
 
 
 There are more documentation [here](https://filuxe.readthedocs.io/en/latest/) with among others 'a quick spin' page (which is a diy livetest).
+
+
+# Some related reading
+
+Article about rclone on [hackaday](https://hackaday.com/2020/11/10/linux-fu-send-in-the-cloud-clones/)
+

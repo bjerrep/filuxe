@@ -11,11 +11,11 @@ A couple of python libraries are required. Python version needs to be 3.6+. If i
 
 ::
 
-    python-watchdog
-    python-flask
-    python-flask-httpauth
+    pathlib
+    watchdog
+    flask-restful
+    flask-httpauth
 
-    ubuntu 18.04 flask-restful (pip)
 
 
 Reading

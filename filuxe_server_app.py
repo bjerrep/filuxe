@@ -1,7 +1,8 @@
 from log import deb, inf, war, cri
 from util import chunked_reader
 import os
-from flask import Flask, request, abort, jsonify, send_from_directory, safe_join, render_template, Response, stream_with_context
+from flask import Flask, request, abort, jsonify, send_from_directory,\
+    safe_join, render_template, Response, stream_with_context
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_restful import inputs
@@ -119,24 +120,29 @@ def route_delete(path):
 def list_files(path):
     recursive = request.args.get('recursive', type=inputs.boolean, default=False)
     path = safe_join(os.path.join(app.config['fileroot'], path))
-    files = {}
-    directories = []
+    fileroot = os.path.join(app.config['fileroot'], '')
+    result = {}
     inf('returning list from %s' % path)
+    nof_dirs = 0
+    nof_files = 0
 
     for _root, dirs, _files in os.walk(path):
-        for dir in dirs:
-            directories.append(dir)
-
         for file in _files:
             p = os.path.join(_root, file)
-            relative = os.path.relpath(p, app.config['fileroot'])
-            files[relative] = {'size': os.path.getsize(p), 'time': os.path.getatime(p)}
+            relative = os.path.relpath(_root, fileroot)
+            if not result.get(relative):
+                result[relative] = {}
+                nof_dirs += 1
+            result[relative][file] = {'size': os.path.getsize(p), 'time': os.path.getatime(p)}
+
+        nof_dirs += len(dirs)
+        nof_files += len(_files)
 
         if not recursive:
             break
 
-    result = {'serverpath': path, 'files': files, 'directories': directories}
-    return jsonify(result)
+    ret = {'info': {'fileroot': fileroot, 'files': nof_files, 'dirs': nof_dirs}, 'filelist': result}
+    return jsonify(ret)
 
 
 @app.route('/api/<path:path>')

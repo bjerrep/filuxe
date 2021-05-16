@@ -4,7 +4,7 @@ Web server
 ##############################
 
 It is the same webserver application that is used for both LAN and WAN and each domain will provide an individual configuration file to its webserver instance. The webserver can run both HTTPS and plain HTTP, see
-:doc:`here </keysandcertificates>` for generating a selfsigned certificate for HTTPS. For the sake of development and testing Filuxe the LAN is considered safe, and the LAN webserver runs with plain HTTP, while the WAN server is on the roaring internet and uses HTTPS.
+:doc:`here </keysandcertificates>` for generating a selfsigned certificate for HTTPS. For the sake of development and testing Filuxe, the LAN is considered safe and the LAN webserver runs with plain HTTP, while the WAN server is on the roaring internet and uses HTTPS.
 
 Flask debugging is default off, to turn it on while developing launch the webserver as ::
 

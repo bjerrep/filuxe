@@ -1,5 +1,5 @@
 import requests, time, os
-from log import deb, inf, cri
+from log import deb, inf, err, cri
 from errorcodes import ErrorCode
 from util import chunked_reader
 import warnings, urllib3, json
@@ -42,12 +42,17 @@ class Filuxe:
                     self.file_root = cfg['lan_filestorage']
 
         except KeyError as e:
-            cri(f'expected a {e} entry in the configuration file', ErrorCode.MISSING_KEY)
+            err(f'expected a {e} entry in the configuration file', ErrorCode.MISSING_KEY)
 
         try:
             self.write_key = cfg['write_key']
         except:
             self.write_key = ''
+
+    @staticmethod
+    def load_config_file(filename):
+        with open(filename) as f:
+            return json.loads(f.read())
 
     def download(self, filename, path):
         url = f'{self.server}/download/{path}'
@@ -117,10 +122,20 @@ class Filuxe:
         return ErrorCode.FILE_NOT_FOUND
 
     def list(self, path, pretty=False, recursive=False):
+        response = requests.get(f'{self.server}/filelist/{path}',
+                                headers={'key': self.write_key},
+                                params={'recursive': recursive},
+                                verify=self.certificate)
+        if response.status_code != 200:
+            return ErrorCode.SERVER_ERROR, response.reason
+        if pretty:
+            return ErrorCode.OK, json.dumps(response.json(), indent=4)
+        return ErrorCode.OK, response.json()
+
+    def list_files(self, path, recursive=False):
         response = requests.get('{}/filelist/{}'.format(self.server, path),
                                 headers={'key': self.write_key},
                                 params={'recursive': recursive},
                                 verify=self.certificate)
-        if pretty:
-            return ErrorCode.OK, json.dumps(response.json(), indent=4)
-        return ErrorCode.OK, response.json()
+        jsn = response.json()
+        return ErrorCode.OK, list(jsn['filelist'][path].keys())

@@ -16,6 +16,8 @@ Before starting then make local copies of the three configuration files config_l
 
 Also have a look at :doc:`installing </installing>` to get the dependencies installed.
 
+Other ways to get filuxe fired up is to run the livetest.py script which starts a filuxe system from scratch in order to run a few testcases and the test_servers.py script that starts a filuxe system (in ./test) and leave it running for testing and experimenting.
+
 LAN Webserver
 =============
 
@@ -54,7 +56,8 @@ The forwarder application will, based on a rules setup, forward files from the L
 
     {
         "default": {
-            "export": "on"
+            "export": true,
+            "delete": true
         },
         "dirs": {
             "test": {
@@ -107,12 +110,18 @@ Which gives:
 ::
 
     {
-        "directories": [],
-        "files": {
-            "test/test.zip": {
-                "date": 1589750865.268956,
-                "size": 11
+        "filelist": {
+            "test": {
+                "test.zip": {
+                    "size": 0,
+                    "time": 1591819292.2268672
+                }
             }
+        },
+        "info": {
+            "dirs": 1,
+            "fileroot": "/opt/filestorage_wan/",
+            "files": 1
         }
     }
 

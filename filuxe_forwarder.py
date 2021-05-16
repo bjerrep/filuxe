@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, traceback, json
+import argparse, json, traceback
 from log import logger as log
 from log import inf, cri
 from errorcodes import ErrorCode
@@ -18,6 +18,8 @@ parser.add_argument('--templaterule', action='store_true',
                     help='make an example rules.json file')
 parser.add_argument('--rules', default='rules.json',
                     help='rules json file, default rules.json')
+parser.add_argument('--dryrun', action='store_true',
+                    help='don\'t actually delete files')
 
 parser.add_argument('--verbose', action='store_true',
                     help='enable debug messages')
@@ -45,7 +47,7 @@ if args.templaterule:
     product_release = {"include": "zip", "maxfiles": "unlimited"}
     product_candidate = {"include": "zip,elf"}
     product = {"maxfiles": 2}
-    root = {"maxfiles": 10, "export": "on"}
+    root = {"maxfiles": 10, "export": True}
     config = {"default": root, "dirs": {
         "product/release/image": product_release_image,
         "product/candidate": product_candidate,
@@ -58,6 +60,7 @@ if args.templaterule:
 if args.config:
     try:
         cfg = config_util.load_config(args.config)
+        inf(f'loaded configuration {args.config}')
     except FileNotFoundError as e:
         die(e, ErrorCode.FILE_NOT_FOUND)
     except json.decoder.JSONDecodeError as e:
@@ -66,6 +69,7 @@ if args.config:
 rules = None
 try:
     rules = config_util.load_config(args.rules)
+    inf(f'loaded rules file {args.rules}')
 except json.decoder.JSONDecodeError as e:
     die(e, ErrorCode.FILE_INVALID)
 except FileNotFoundError:
@@ -78,7 +82,8 @@ try:
         cri('critical message', errcode)
 
 except Exception as e:
+    if log.level <= logging.INFO:
+        traceback.print_exc()
     die(e, ErrorCode.UNHANDLED_EXCEPTION)
-
 
 inf('exiting')
