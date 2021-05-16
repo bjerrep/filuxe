@@ -115,7 +115,7 @@ class Servers:
 
     def wait_for_server(self, config, lan):
         ready = False
-        attempts = 10
+        attempts = 50
         while not ready and attempts:
             try:
                 if lan:
