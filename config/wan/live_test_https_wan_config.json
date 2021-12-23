@@ -1,0 +1,13 @@
+{
+    "wan_filestorage": "test/filestorage_wan",
+    "wan_host": "localhost",
+    "wan_port": 9000,
+    "write_key": "devel",
+    "wan_certificate": "config/certificates/cert.pem.devel",
+    "certificates": [
+        "config/certificates/cert.pem.devel",
+        "config/certificates/key.pem.devel"
+    ],
+    "username": "name",
+    "password": "pwd"
+}

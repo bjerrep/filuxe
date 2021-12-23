@@ -1,0 +1,5 @@
+{
+    "lan_filestorage": "test/filestorage_lan",
+    "lan_host": "localhost",
+    "lan_port": 8000
+}

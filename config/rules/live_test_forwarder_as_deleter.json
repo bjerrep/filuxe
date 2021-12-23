@@ -1,0 +1,20 @@
+{
+    "default": {
+        "include": [".*\\.zip"],
+        "max_files": 2
+    },
+    "dirs": {
+        "first": {
+            "max_files": 1,
+            "version": ["(.*?)\\:\\d+\\.\\d+\\.\\d+\\:(.*)"],
+            "delete_by": "version"
+        },
+        "second": {
+            "max_files": "unlimited",
+            "version": ["(.*?)\\:\\d+\\.\\d+\\.\\d+\\:(.*)"]
+        },
+        "second/second": {
+            "max_files": 3
+        }
+    }
+}
