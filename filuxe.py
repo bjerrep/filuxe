@@ -1,15 +1,9 @@
 #!/usr/bin/env python3
-import argparse, traceback, json, requests
+import argparse, json, requests
 from log import logger as log
-from log import inf, cri
+from log import inf, die
 from errorcodes import ErrorCode
 import logging, filuxe_api, config_util
-
-
-def die(e, error_code):
-    if args.verbose:
-        print(traceback.format_exc())
-    cri(f'caught exception {e}', error_code)
 
 
 parser = argparse.ArgumentParser('filuxe')
@@ -36,9 +30,10 @@ parser.add_argument('--touch', action='store_true',
 parser.add_argument('--force', action='store_true',
                     help='allow a --upload to rewrite an existing file (which is default illegal)')
 
-
 parser.add_argument('--verbose', action='store_true',
-                    help='enable debug messages')
+                    help='enable verbose messages')
+parser.add_argument('--info', action='store_true',
+                    help='enable informational messages')
 parser.add_argument('--pretty', action='store_true',
                     help='pretty print json')
 parser.add_argument('--config', default='config_forwarder.json',
@@ -48,6 +43,8 @@ args = parser.parse_args()
 
 if args.verbose:
     log.setLevel(logging.DEBUG)
+elif args.info:
+    log.setLevel(logging.INFO)
 else:
     log.setLevel(logging.WARNING)
 
@@ -57,40 +54,41 @@ if args.config:
     try:
         cfg = config_util.load_config(args.config)
     except FileNotFoundError as e:
-        die(e, ErrorCode.FILE_NOT_FOUND)
+        die('config file not found', e, ErrorCode.FILE_NOT_FOUND)
     except json.decoder.JSONDecodeError as e:
-        die(e, ErrorCode.FILE_INVALID)
+        die(f'json error in {args.config}', e, ErrorCode.FILE_INVALID)
 
 try:
     lan = cfg.get('lan_host')
 
     filuxe = filuxe_api.Filuxe(cfg, lan=lan)
 
-    errorcode = ErrorCode.UNSET
+    error_code = ErrorCode.UNSET
 
     try:
         if args.download:
-            errorcode = filuxe.download(args.file, args.path)
+            error_code = filuxe.download(args.file, args.path, args.force)
         elif args.upload:
-            errorcode = filuxe.upload(args.file, args.path, args.touch, args.force)
+            error_code = filuxe.upload(args.file, args.path, args.touch, args.force)
         elif args.delete:
-            errorcode = filuxe.delete(args.path)
+            error_code = filuxe.delete(args.path)
         elif args.list:
-            errorcode, list = filuxe.list(args.path, args.pretty, args.recursive)
+            error_code, list = filuxe.list(args.path, args.pretty, args.recursive)
             print(list)
         elif args.filelist:
-            errorcode, file_list = filuxe.list_files(args.path, args.recursive)
+            error_code, file_list = filuxe.list_files(args.path, args.recursive)
             for name in file_list:
                 print(name)
         else:
-            cri('seems that you didnt really tell me what to do ?', ErrorCode.BAD_ARGUMENTS)
+            die('seems that you didnt really tell me what to do ?', ErrorCode.BAD_ARGUMENTS)
     except requests.exceptions.ConnectionError:
-        cri('Connection refused, server might be offline?', ErrorCode.SERVER_ERROR)
+        die('Connection refused, server might be offline?', ErrorCode.SERVER_ERROR)
 
-    if errorcode != ErrorCode.OK:
-        cri('operation failed with', errorcode)
+    if error_code != ErrorCode.OK:
+        die(f'operation failed with {error_code}')
 
 except Exception as e:
-    die(e, ErrorCode.UNHANDLED_EXCEPTION)
+    die('filuxe crashed', e, ErrorCode.UNHANDLED_EXCEPTION)
 
 inf('exiting')
+exit(0)

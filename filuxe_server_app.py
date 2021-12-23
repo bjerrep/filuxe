@@ -1,14 +1,19 @@
-from log import deb, inf, war, cri
-from util import chunked_reader
+from log import deb, inf, war, err, die
+from util import chunked_reader, file_is_closed, get_file_time
 import os
 from flask import Flask, request, abort, jsonify, send_from_directory,\
-    safe_join, render_template, Response, stream_with_context
+    render_template, Response, stream_with_context
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import safe_join
 from flask_restful import inputs
 from errorcodes import ErrorCode
 from pathlib import Path
 from functools import wraps
+
+import urllib3
+urllib3.disable_warnings()
+
 
 app = Flask(__name__)
 auth = HTTPBasicAuth()
@@ -43,15 +48,29 @@ def index():
     return render_template('index.html', name=app.name)
 
 
+@app.route('/stats')
+def route_stats():
+    with open('version.txt') as f:
+        version = f.read().strip()
+
+    return {
+        'version': version
+    }, 200
+
+
 @app.route('/download/<path:path>')
 def get_file(path):
     filename = os.path.join(app.config['fileroot'], path)
-    if not os.path.getsize(filename):
-        return send_from_directory(app.config['fileroot'], path, as_attachment=True)
-    else:
-        return Response(stream_with_context(chunked_reader(filename)),
-                        headers={'Content-Disposition': f'attachment; filename={path}',
-                                 'Content-Type': 'application/octet-stream'})
+    try:
+        if not os.path.getsize(filename):
+            return send_from_directory(app.config['fileroot'], path, as_attachment=True)
+        else:
+            return Response(stream_with_context(chunked_reader(filename)),
+                            headers={'Content-Disposition': f'attachment; filename={path}',
+                                     'Content-Type': 'application/octet-stream'})
+    except FileNotFoundError:
+        err(f'download request failed, file not found "{path}"')
+        abort(404)
 
 
 @app.route('/upload/<path:path>', methods=['POST'])
@@ -63,34 +82,30 @@ def route_upload(path):
     if path is None:
         abort(404)
 
-    dir = os.path.dirname(path)
-    if not os.path.exists(dir):
-        inf('constructing new path %s' % dir)
-        Path(dir).mkdir(parents=True, exist_ok=True)
+    if os.path.exists(path):
+        if not force:
+            # if force was not given then the default is that the server refuses to rewrite an existing file
+            err(f'file {path} already exist, returning 403 (see --force)')
+            return '', 403
+    else:
+        dir = os.path.dirname(path)
+        if not os.path.exists(dir):
+            inf('constructing new path %s' % dir)
+            Path(dir).mkdir(parents=True, exist_ok=True)
 
     try:
-        # chunked upload
+        # chunked upload, start the file and then append chunks
         range = request.environ['HTTP_CONTENT_RANGE']
 
-        if os.path.exists(path) and range and range.startswith('bytes 0-'):
-            if force:
-                open(path, 'w').close()
-            else:
-                # if force was not given then the default is that the server refuses to rewrite an existing file
-                war(f'file {path} already exist')
-                return '', 403
-
-        inf(f'writing file {path}')
+        if range.startswith('bytes 0-'):
+            open(path, 'w').close()
+            inf(f'writing file "{path}"')
 
         with open(path, "ab") as fp:
             fp.write(request.data)
     except:
-        if not force:
-            war(f'file {path} already exist')
-            return '', 403
-
-        inf(f'writing file {path}')
-
+        # ordinary non-chunked upload, single write
+        inf(f'writing file "{path}"')
         with open(path, "wb") as fp:
             fp.write(request.data)
 
@@ -108,9 +123,9 @@ def route_delete(path):
     path = safe_join(os.path.join(app.config['fileroot'], path))
     try:
         os.remove(path)
-        inf('deleting %s' % path)
+        inf(f'deleting file "{path}"')
     except OSError:
-        inf('failure while deleting %s' % path)
+        inf(f'file not found deleting "{path}"')
         return '', 404
     return '', 200
 
@@ -122,24 +137,30 @@ def list_files(path):
     path = safe_join(os.path.join(app.config['fileroot'], path))
     fileroot = os.path.join(app.config['fileroot'], '')
     result = {}
-    inf('returning list from %s' % path)
     nof_dirs = 0
     nof_files = 0
 
     for _root, dirs, _files in os.walk(path):
         for file in _files:
             p = os.path.join(_root, file)
+            if not file_is_closed(p):
+                war(f'skipping {p} since it is busy')
+                continue
             relative = os.path.relpath(_root, fileroot)
             if not result.get(relative):
                 result[relative] = {}
                 nof_dirs += 1
-            result[relative][file] = {'size': os.path.getsize(p), 'time': os.path.getatime(p)}
+            result[relative][file] = {'size': os.path.getsize(p), 'time': get_file_time(p)}
 
         nof_dirs += len(dirs)
         nof_files += len(_files)
 
         if not recursive:
             break
+
+    extra = "(recursive)" if recursive else ""
+
+    inf(f'returning filelist at "{path}", {nof_files} files and {nof_dirs} directories. {extra}')
 
     ret = {'info': {'fileroot': fileroot, 'files': nof_files, 'dirs': nof_dirs}, 'filelist': result}
     return jsonify(ret)
@@ -165,17 +186,18 @@ def start(args, cfg):
         realm = 'LAN'
 
     try:
+        for i in (0, 1):
+            if not os.path.exists(cfg['certificates'][i]):
+                die(f'specified certificate not found, "{cfg["certificates"][i]}"')
         ssl_context = (cfg['certificates'][0], cfg['certificates'][1])
     except:
         ssl_context = False
-
-    inf(f'{realm} server running at http{"s" if ssl_context else ""}://{host}:{port}. Filestorage root {file_root}')
 
     if not os.path.exists(file_root):
         try:
             os.makedirs(file_root)
         except:
-            cri('unable to create file root %s, please make it yourself and fix permissions' %
+            die('unable to create file root %s, please make it yourself and fix permissions' %
                 file_root,
                 ErrorCode.SERVER_ERROR)
 
@@ -192,6 +214,8 @@ def start(args, cfg):
         inf('HTTP-AUTH enabled')
     except:
         inf('HTTP-AUTH disabled')
+
+    inf(f'{realm} server running at http{"s" if ssl_context else ""}://{host}:{port}. Filestorage root {file_root}')
 
     if ssl_context:
         app.run(host=host, port=port, ssl_context=ssl_context)

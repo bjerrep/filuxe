@@ -1,39 +1,36 @@
 #!/usr/bin/env python3
 import argparse, json, traceback
 from log import logger as log
-from log import inf, cri
+from log import inf, die
 from errorcodes import ErrorCode
 import logging, filuxe_forwarder_app, config_util
 
 
-def die(e, error_code):
-    if args.verbose:
-        print(traceback.format_exc())
-    cri(f'caught exception {e}', error_code)
-
-
 parser = argparse.ArgumentParser('filuxe_forwarder')
+
+parser.add_argument('--config', default='config_forwarder.json',
+                    help='configuration file, default config_forwarder.json')
+parser.add_argument('--rules',
+                    help='rules json file. Default is an empty rule set forwarding everything')
 
 parser.add_argument('--templaterule', action='store_true',
                     help='make an example rules.json file')
-parser.add_argument('--rules', default='rules.json',
-                    help='rules json file, default rules.json')
 parser.add_argument('--dryrun', action='store_true',
                     help='don\'t actually delete files')
 
 parser.add_argument('--verbose', action='store_true',
-                    help='enable debug messages')
-parser.add_argument('--debug', action='store_true',
-                    help='enable debug messages')
-parser.add_argument('--config', default='config_forwarder.json',
-                    help='configuration file, default config_forwarder.json')
+                    help='enable verbose messages')
+parser.add_argument('--info', action='store_true',
+                    help='enable informational messages')
 
 args = parser.parse_args()
 
 if args.verbose:
     log.setLevel(logging.DEBUG)
+    logging.getLogger('werkzeug').setLevel(logging.INFO)
+    logging.getLogger('watchdog').setLevel(logging.INFO)
 else:
-    if args.debug:
+    if args.info:
         log.setLevel(logging.INFO)
     else:
         log.setLevel(logging.WARNING)
@@ -62,28 +59,31 @@ if args.config:
         cfg = config_util.load_config(args.config)
         inf(f'loaded configuration {args.config}')
     except FileNotFoundError as e:
-        die(e, ErrorCode.FILE_NOT_FOUND)
+        die('config file not found', e)
     except json.decoder.JSONDecodeError as e:
-        die(e, ErrorCode.FILE_INVALID)
+        die(f'json error in {args.config}', e, ErrorCode.FILE_INVALID)
 
-rules = None
-try:
-    rules = config_util.load_config(args.rules)
-    inf(f'loaded rules file {args.rules}')
-except json.decoder.JSONDecodeError as e:
-    die(e, ErrorCode.FILE_INVALID)
-except FileNotFoundError:
-    inf(f'loading {args.rules} failed, running with default rules')
+loaded_rules = None
+if args.rules:
+    try:
+        loaded_rules = config_util.load_config(args.rules)
+        inf(f'loaded rules file {args.rules}')
+    except json.decoder.JSONDecodeError as e:
+        die(f'json error in {args.rules}', e, ErrorCode.FILE_INVALID)
+    except:
+        die(f'loading {args.rules} failed')
+else:
+    inf('no rules specified, running with default rules forwarding everything')
 
 try:
-    errcode = filuxe_forwarder_app.start(args, cfg, rules)
+    errcode = filuxe_forwarder_app.start(args, cfg, loaded_rules)
 
     if errcode != ErrorCode.OK:
-        cri('critical message', errcode)
+        die('critical message', errcode)
 
 except Exception as e:
     if log.level <= logging.INFO:
         traceback.print_exc()
-    die(e, ErrorCode.UNHANDLED_EXCEPTION)
+    die('forwarder crashed', e, ErrorCode.UNHANDLED_EXCEPTION)
 
 inf('exiting')

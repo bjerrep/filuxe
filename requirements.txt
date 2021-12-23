@@ -6,3 +6,9 @@ pexpect
 pathlib
 requests
 pathlib
+psutil
+
+
+# arch packages
+# repo: python-flask-restful python-flask-httpauth python-flask
+# aur: python-pathlib

@@ -4,6 +4,7 @@ doc/_build
 
 *.json
 *.bak
+
 certificates
 test
-
+local

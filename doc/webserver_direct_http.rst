@@ -16,7 +16,7 @@ Since the webservers on the LAN and WAN are exactly the same the upload can be u
 ::
 
     curl <host>/upload/<dest> -H "Content-Type:application/octet-stream" -H "key: secret_write_key" --data-binary @<src>
-    
+
 
 
 Get list of files
@@ -25,18 +25,26 @@ Get list of files
 ::
 
     curl -s <LAN host>/filelist/
-    
-    {
-    "directories": [
-        "test"
-    ], 
-    "files": {
-        "test.zip": {
-        "date": 1589754875.1188116, 
-        "size": 11
-        }
-    }
 
+    {
+      "filelist": {
+        ".": {
+          "here_is_a_file.zip": {
+            "size": 12,
+            "time": 1640218563.1022844
+          },
+          "here_is_another_file.zip": {
+            "size": 56,
+            "time": 1640218582.7589521
+          }
+        }
+      },
+      "info": {
+        "dirs": 1,
+        "fileroot": "test/filestorage_lan/",
+        "files": 2
+      }
+    }
 
 Alternatively "wget -A zip localhost:8000/files -O filelist"
 

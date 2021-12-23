@@ -1,30 +1,33 @@
 # This is a minimal logging module without external dependencies as if that was a quality
 # in itself. Otherwise check out 'coloredlogs' which is the real thing.
 #
-import logging, sys
+import logging, sys, traceback, os
 from errorcodes import ErrorCode
 
-indent = ''
+_indent = ''
 
 
 class Indent():
     def __init__(self):
-        global indent
-        indent += '   '
+        global _indent
+        _indent += '   '
 
-    def __del__(self):
-        global indent
-        indent = indent[:-3]
+    def __enter__(self):
+        pass
 
-    @staticmethod
-    def indent():
-        return indent
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        global _indent
+        _indent = _indent[:-3]
 
 
 RESET = '\033[0m'
+add_timestamp = True
 
 handler = logging.StreamHandler(sys.stdout)
-formatter = logging.Formatter(f'{indent}%(levelname)s %(message)s{RESET}')
+if add_timestamp:
+    formatter = logging.Formatter(f'%(asctime)s %(levelname)s %(message)s{RESET}', datefmt='%Y-%m-%d %H:%M:%S')
+else:
+    formatter = logging.Formatter(f'%(levelname)s %(message)s{RESET}')
 handler.setFormatter(formatter)
 logger = logging.getLogger()
 logger.addHandler(handler)
@@ -55,7 +58,7 @@ else:
 def deb(msg, newline=True):
     if not newline:
         handler.terminator = ''
-    logger.debug(f'{indent}{msg}')
+    logger.debug(f'{_indent}{msg}')
     if not newline:
         handler.terminator = '\n'
 
@@ -63,20 +66,35 @@ def deb(msg, newline=True):
 def inf(msg, newline=True):
     if not newline:
         handler.terminator = ''
-    logger.info(f'{indent}{msg}')
+    logger.info(f'{_indent}{msg}')
     if not newline:
         handler.terminator = '\n'
 
 
 def war(msg):
-    logger.warning(f'{indent}{msg}')
+    logger.warning(f'{_indent}{msg}')
 
 
 def err(msg):
-    logger.error(f'{indent}{msg}')
+    logger.error(f'{_indent}{msg}')
 
 
-def cri(msg, exit_code):
-    logger.critical(f'{msg} {exit_code}')
-    logger.critical(f'now exiting due to critical error \'{ErrorCode.to_string(exit_code.value)}\'')
-    exit(exit_code.value)
+def die(msg, e=None, error_code=None):
+    if logger.level == logging.DEBUG:
+        print(traceback.format_exc())
+    if error_code:
+        exit_code = error_code.value
+        logger.critical(f'now exiting due to critical error \'{ErrorCode.to_string(error_code.value)}\'')
+    else:
+        exit_code = 1
+    if e:
+        logger.critical(f'exception: {str(e)}')
+    logger.critical(msg)
+    os._exit(exit_code)
+
+
+def human_file_size(filesize):
+    sizes = [('bytes', 1, 0), ('KiB', 1024, 2), ('MiB', 1024 * 1024, 2), ('GiB', 1024 * 1024 * 1024, 2)]
+    for label, divisor, digits in sizes:
+        if filesize < divisor * 1024 or label == 'GiB':
+            return f'{filesize/divisor:.{digits}f} {label}'

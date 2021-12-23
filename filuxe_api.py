@@ -1,7 +1,8 @@
 import requests, time, os
-from log import deb, inf, err, cri
+from log import deb, inf, war, err, die, human_file_size
 from errorcodes import ErrorCode
-from util import chunked_reader
+from util import chunked_reader, get_file_time
+import config_util
 import warnings, urllib3, json
 
 warnings.simplefilter('ignore', urllib3.exceptions.SecurityWarning)
@@ -38,8 +39,7 @@ class Filuxe:
                 try:
                     self.file_root = cfg['wan_filestorage']
                 except:
-                    inf('loading forwarder configuration')
-                    self.file_root = cfg['lan_filestorage']
+                    self.file_root = ''
 
         except KeyError as e:
             err(f'expected a {e} entry in the configuration file', ErrorCode.MISSING_KEY)
@@ -49,36 +49,60 @@ class Filuxe:
         except:
             self.write_key = ''
 
+    def log_path(self, path):
+        relpath = os.path.relpath(os.path.abspath(path), self.root())
+        return f'[{os.path.normpath(os.path.join(self.domain, relpath))}]'
+
+    def root(self):
+        return self.file_root
+
     @staticmethod
     def load_config_file(filename):
-        with open(filename) as f:
-            return json.loads(f.read())
+        config_util.load_config(filename)
 
-    def download(self, filename, path):
-        url = f'{self.server}/download/{path}'
-        deb(f'download {url}')
+    def get_stats(self):
+        url = f'{self.server}/stats'
+        deb(f'getting stats at {url}')
         response = requests.get(url,
                                 verify=self.certificate)
-        if not os.path.exists(filename):
+        if response.status_code != 200:
+            err(f'got {response.status_code} from {self.domain} server at /stats')
+            return ErrorCode.SERVER_ERROR, []
+        return ErrorCode.OK, json.loads(response.text)
+
+    def download(self, filename, path, force=False):
+        url = f'{self.server}/download/{path}'
+        response = requests.get(url,
+                                verify=self.certificate)
+        if response.status_code != 200:
+            err(f'server returned error {response.status_code} for downloading "{path}"')
+            return ErrorCode.FILE_NOT_FOUND
+
+        if force or not os.path.exists(filename):
             open(filename, 'wb').write(response.content)
+            inf(f'downloaded {url} ({human_file_size(os.path.getsize(filename))}) as "{filename}"')
         else:
-            cri('local file already exists, bailing out', ErrorCode.FILE_ALREADY_EXIST)
+            die(f'local file "{filename}" already exists, bailing out (see --force)', ErrorCode.FILE_ALREADY_EXIST)
         return ErrorCode.OK
 
     def upload(self, filename, path=None, touch=False, force=False):
         if not path:
             path = filename
 
+        if not os.path.exists(filename):
+            err(f'upload failed, file not found "{filename}"')
+            return ErrorCode.FILE_NOT_FOUND
+
         if touch:
             epoch = time.time()
         else:
-            epoch = os.path.getatime(filename)
+            epoch = get_file_time(filename)
 
         if self.force:
             force = True
 
         size = os.path.getsize(filename)
-        deb(f'uploading {filename} {size:,} bytes to server as {path}')
+        inf(f'uploading "{os.path.normpath(filename)}" ({human_file_size(size)}) to {self.domain} server as "{path}"')
         index = 0
         offset = 0
 
@@ -102,7 +126,7 @@ class Filuxe:
                                              verify=self.certificate)
                     index = offset
             except Exception as e:
-                print(e)
+                war(f'upload failed with {e}')
 
         try:
             if response.status_code == 201:
