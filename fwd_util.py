@@ -69,14 +69,18 @@ def filter_filelist(filelist, rules, recursive):
         filtered_filelist = copy.deepcopy(filelist)
 
         for path, files in filelist['filelist'].items():
-            for filename, attributes in files.items():
-                if not filename_is_included(filename, rules['dirs'][path]):
-                    try:
-                        if not last_http_filelist['filelist'][path].get(filename):
-                            inf(f'ignoring new file "{path}/{filename}", no rules hit')
-                    except:
-                        pass
-                    del filtered_filelist['filelist'][path][filename]
+            if not rules['dirs'].get(path):
+                # Got directories from wan that does not exist on lan.
+                inf(f'filter filelist: got path "{path}" which is not found in rules')
+            else:
+                for filename, attributes in files.items():
+                    if not filename_is_included(filename, rules['dirs'][path]):
+                        try:
+                            if not last_http_filelist['filelist'][path].get(filename):
+                                inf(f'ignoring new file "{path}/{filename}", no rules hit')
+                        except:
+                            pass
+                        del filtered_filelist['filelist'][path][filename]
     except:
         deb('http filelist returned unfiltered (bad rules?)')
 
@@ -110,52 +114,58 @@ def get_http_filelist(filuxe_handle, path='/', recursive=True, rules=None):
     return None
 
 
-def filestorage_scan(file_root):
+def filestorage_scan(root, path='', recursive=True):
     _filelist = {}
     total_directories = 0
     total_files = 0
     total_size = 0
 
-    inf(f'scanning "{file_root}"')
+    scan_root = os.path.join(root, path)
+
+    inf(f'scanning "{scan_root}"')
 
     with Indent() as _:
-        for root, dirs, files in os.walk(file_root):
-            path = os.path.relpath(root, file_root)
+        for _root, _dirs, _files in os.walk(scan_root):
+            _path = os.path.relpath(_root, scan_root)
             size = 0
 
-            for _file in files:
-                if not _filelist.get(path):
-                    _filelist[path] = {}
+            relative_path = os.path.normpath(os.path.join(path, _path))
+            if not _filelist.get(relative_path):
+                _filelist[relative_path] = {}
 
-                file = os.path.join(root, _file)
-                if util.file_is_closed(file):
+            for _file in _files:
+                file = os.path.join(_root, _file)
+                if util.file_is_closed(os.path.abspath(file)):
                     _size = os.path.getsize(file)
                     epoch = util.get_file_time(file)
                     metrics = {'size': _size, 'time': epoch}
-                    _filelist[path][_file] = metrics
-                    size += os.path.getsize(os.path.join(root, _file))
+                    _filelist[relative_path][_file] = metrics
+                    size += os.path.getsize(os.path.join(_root, _file))
                 else:
                     war(f'filestorage scan, ignoring open file {file}')
 
             total_directories += 1
-            total_files += len(files)
+            total_files += len(_files)
             total_size += size
-            deb(f'scanned "{path}", {human_file_size(size)} in {len(files)} files')
+            deb(f'scanned "{relative_path}", {human_file_size(size)} in {len(_files)} files')
+
+            if not recursive:
+                break
 
         inf(f'found {total_directories} directories with {total_files} files occupying {human_file_size(total_size)}')
 
     return {'filelist': _filelist,
-            'info': {'dirs': total_directories, 'fileroot': file_root, 'files': total_files, 'size': total_size}}
+            'info': {'dirs': total_directories, 'fileroot': relative_path, 'files': total_files, 'size': total_size}}
 
 
-def filestorage_directory_scan(path):
-    return list(filestorage_scan(path)['filelist'].keys())
+def filestorage_directory_scan(root):
+    return list(filestorage_scan(root)['filelist'].keys())
 
 
-def get_local_filelist(path='/', recursive=True, rules=None):
+def get_local_filelist(root='/', path='', recursive=True, rules=None):
     """
     """
-    filelist = filestorage_scan(path)
+    filelist = filestorage_scan(root, path, recursive)
     if not rules:
         return filelist
 

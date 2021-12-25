@@ -78,7 +78,7 @@ def calculate_rules(check_dirs):
 
                     deb(f'transient rule: "{path}" {new_rules[path]}')
         except:
-            war(f'establishing rules for {_key} failes, check rules file')
+            war(f'establishing rules for {_key} failed, check rules file')
 
         # purge rules that doesn't trigger any actions
 
@@ -363,14 +363,14 @@ def start(args, cfg, _rules):
     except Exception as e:
         die('unexpected exception while contacting lan server', e)
 
+    lan_file_deleter = fwd_file_deleter.FileDeleter(filuxe_lan, active_rules, args.dryrun)
+    lan_file_deleter.enforce_max_files('', recursive=True)
+
     try:
         if filuxe_wan and cfg['sync_at_startup']:
             synchonize(cfg)
     except:
         inf('syncronizing lan to wan failed')
-
-    lan_file_deleter = fwd_file_deleter.FileDeleter(filuxe_lan, active_rules, args.dryrun)
-    lan_file_deleter.enforce_max_files('', recursive=True)
 
     idle_detect = IdleDetect()
     try:

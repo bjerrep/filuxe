@@ -62,6 +62,8 @@ class Item:
 
             except KeyError as e:
                 war(f'sort by version but failed to parse 3 digits from "{directory}/{self.file}", key {e} not found')
+            except AttributeError:
+                war(f'version regex failed on filename "{os.path.join(directory, self.file)}"')
             except Exception as e:
                 deb(f'exception {e}')
 
@@ -94,19 +96,26 @@ class FileDeleter:
         self.rules = rules
         self.dryrun = dryrun
 
-    def delete_files(self, filegroup, message, use_http):
+    def delete_files(self, filegroup, group_name, use_http):
         directory = filegroup['directory']
         filelist = filegroup['files']
         to_delete = len(filelist) - filegroup['maxfiles']
 
         if to_delete > 0:
+            delete_by = filegroup["deleteby"]
+
             inf(f'deleting {to_delete} files from {self.domain.domain} filestorage, '
-                f'path="{filegroup["directory"]}" group "{message}"')
+                f'path="{filegroup["directory"]}" group "{group_name}". Deleteby={delete_by}')
 
-            _items = [Item(x, directory, self.rules, filegroup['deleteby']) for x in filelist.items()]
-            _sorted_items = sorted(_items)
+            _items = [Item(x, directory, self.rules, delete_by) for x in filelist.items()]
+            try:
+                _sorted_items = sorted(_items)
+            except:
+                first_filename = list(filelist.keys())[0]
+                war(f'failed running delete by "{delete_by}" in group "{group_name}". Files of type "{first_filename}"')
+                return
 
-            deb(f'http filelist sorted by: "{filegroup["deleteby"]}", delete from top')
+            deb(f'http filelist sorted by: "{delete_by}", delete from top')
             for item in _sorted_items:
                 fwd_util.print_file(item)
 
@@ -171,7 +180,7 @@ class FileDeleter:
 
         return file_groups
 
-    def enforce_max_files(self, path, recursive=False, use_http=False):
+    def enforce_max_files(self, path, recursive=True, use_http=False):
         """
         Note that this method is called from a inotify watcher on the local filesystem. So even
         while the watcher was given the name of the modified file this method is completely
@@ -187,7 +196,8 @@ class FileDeleter:
             if use_http:
                 filelist = fwd_util.get_http_filelist(self.domain, path, recursive, rules=self.rules)
             else:
-                filelist = fwd_util.get_local_filelist(self.domain.root(), recursive, rules=self.rules)
+                scan_directory = self.domain.root()
+                filelist = fwd_util.get_local_filelist(scan_directory, path, recursive, rules=self.rules)
 
             try:
                 directories = filelist['filelist'].keys()
@@ -226,5 +236,3 @@ class FileDeleter:
 
         except Exception as e:
             die(f'exception in enforce_max_files {e.__repr__()}', error_code=ErrorCode.INTERNAL_ERROR)
-
-        return
