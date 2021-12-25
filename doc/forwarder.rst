@@ -69,30 +69,37 @@ There are some forwarder configuration example files used by the live test in co
 Rules
 ************************************************************
 
-The rules file is in json and consist of a default section and a list of directories needing special settings. Both entries are optional and the rules file itself is optional as well. The default behavior of the forwarder is that all files are forwarded and that there are no limit for the number of files present on the wan server. 
+The rules file is in json and consist of a default section and a list of directories needing special settings. Both entries are optional and the rules file itself is optional as well. The default behavior of the forwarder is that all files are forwarded and that there are no limit for the number of files.
 
 A rules file could look like this:
 ::
 
     {
         "default": {
-            "export": true,
-            "sync_at_startup": true,
-            "max_files": 100,
-            "delete_by": "version"
+            "include": [".*\\.zip"],
+            "max_files": 2
         },
         "dirs": {
-            "test": {
-                "include": "zip",
-                "max_files": 10,
-                "group": ["(.*?)\\:\\d+\\.\\d+\\.\\d+\\:(.*)"]
+            "first": {
+                "max_files": 1,
+                "exclude": ["unversioned_..zip"],
+                "version": ".*?:(\\d+.\\d+.\\d+):.*?",
+                "group": ["(.*?)\\:\\d+\\.\\d+\\.\\d+\\:(.*)"],
+                "delete_by": "version"
+            },
+            "second": {
+                "include": [".*"],
+                "max_files": "unlimited"
+            },
+            "second/second": {
+                "max_files": 2
             }
         }
     }
 
-Forwarder rules files used by the live test can be found in config/rules.
-    
-Note that the default section is the same as the rule for the root directory meaning that settings here will be default inherited for all directories in the entire directory tree.
+Forwarder rules files used by the live test can be found in config/rules and the example above is live_test_forwarder_as_deleter.json. A matching testset with files and that exercises these rules can be found in testdata/filestorage_lan.
+
+Note that the default section is the same as the rule for the root directory meaning that settings here will be default inherited for all directories in the entire directory tree. Rules for a given directory is the rules inherited from the parent directory with any explicit rules in a given directory replacing the rules inherited from the parent. 
 
 **Default rules:**
 
@@ -110,8 +117,8 @@ Note that the default section is the same as the rule for the root directory mea
 These settings can be listed in the default section as well but if they are present in a
 given directory section these will take precedence.
 
-"max_files": -1
-    Default is no limit to the number of files
+"max_files": "unlimited"
+    Default is no limit to the number of files. Otherwise the limit as a plain integer.
 
 "include": ".*"
     Default is to include everything
