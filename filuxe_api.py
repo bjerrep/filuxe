@@ -103,8 +103,6 @@ class Filuxe:
 
         size = os.path.getsize(filename)
         inf(f'uploading "{os.path.normpath(filename)}" ({human_file_size(size)}) to {self.domain} server as "{path}"')
-        index = 0
-        offset = 0
 
         if not size:
             response = requests.post('{}/upload/{}'.format(self.server, path),
@@ -114,16 +112,21 @@ class Filuxe:
                                      verify=self.certificate)
         else:
             try:
+                index = 0
+                offset = 0
+
                 for chunk in chunked_reader(filename):
                     offset = index + len(chunk)
                     response = requests.post('{}/upload/{}'.format(self.server, path),
                                              headers={'key': self.write_key,
                                                       'Content-Type': 'application/octet-stream',
                                                       'Content-length': str(size),
-                                                      'Content-Range': 'bytes %s-%s/%s' % (index, offset, size)},
+                                                      'Content-Range': f'bytes {index}-{offset - 1}/{size}'},
                                              data=chunk,
                                              params={'time': epoch, 'force': force},
                                              verify=self.certificate)
+                    if response.status_code != 201:
+                        break
                     index = offset
             except Exception as e:
                 war(f'upload failed with {e}')

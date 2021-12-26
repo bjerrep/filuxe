@@ -182,11 +182,12 @@ class FileDeleter:
 
     def enforce_max_files(self, path, recursive=True, use_http=False):
         """
-        Note that this method is called from a inotify watcher on the local filesystem. So even
-        while the watcher was given the name of the modified file this method is completely
-        self contained and reloads the filesystem content from the lan server and does its own
-        housekeeping over http. There are currently no scenarios where this makes sense and it should just
-        be rewritten to work on the local filesystem as is already done elsewhere.
+        Get the list of files (locally or over http) and delete files if required by
+        the rule "max_files". It can run a full recursive scan-and-delete as is
+        done when starting the forwarder (with an empty path and recursive=True),
+        and it can run in a specific directory when triggered by a new or modified
+        file (with a path and recursive=False).
+        Returns nothing.
         """
         if not self.rules:
             return

@@ -134,15 +134,18 @@ def filestorage_scan(root, path='', recursive=True):
                 _filelist[relative_path] = {}
 
             for _file in _files:
-                file = os.path.join(_root, _file)
-                if util.file_is_closed(os.path.abspath(file)):
-                    _size = os.path.getsize(file)
-                    epoch = util.get_file_time(file)
-                    metrics = {'size': _size, 'time': epoch}
-                    _filelist[relative_path][_file] = metrics
-                    size += os.path.getsize(os.path.join(_root, _file))
-                else:
-                    war(f'filestorage scan, ignoring open file {file}')
+                try:
+                    file = os.path.join(_root, _file)
+                    if util.file_is_closed(os.path.abspath(file)):
+                        _size = os.path.getsize(file)
+                        epoch = util.get_file_time(file)
+                        metrics = {'size': _size, 'time': epoch}
+                        _filelist[relative_path][_file] = metrics
+                        size += os.path.getsize(os.path.join(_root, _file))
+                    else:
+                        war(f'filestorage scan, ignoring open file {file}')
+                except FileNotFoundError:
+                    deb(f'filestorage scan: file not found {file}')
 
             total_directories += 1
             total_files += len(_files)

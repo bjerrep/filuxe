@@ -1,6 +1,6 @@
-from log import deb, inf, war, err, die
+from log import deb, inf, war, err, die, human_file_size
 from util import chunked_reader, file_is_closed, get_file_time
-import os
+import os, re
 from flask import Flask, request, abort, jsonify, send_from_directory,\
     render_template, Response, stream_with_context
 from flask_httpauth import HTTPBasicAuth
@@ -19,7 +19,7 @@ app = Flask(__name__)
 auth = HTTPBasicAuth()
 
 users = {}
-
+chunked_file_handle = {}
 
 def require_write_key(fn):
     @wraps(fn)
@@ -76,34 +76,54 @@ def get_file(path):
 @app.route('/upload/<path:path>', methods=['POST'])
 @require_write_key
 def route_upload(path):
+    global chunked_file_handle
     time = request.args.get('time', type=float, default=0.0)
     force = request.args.get('force', type=inputs.boolean, default=False)
     path = safe_join(os.path.join(app.config['fileroot'], path))
     if path is None:
         abort(404)
 
-    if os.path.exists(path):
-        if not force:
-            # if force was not given then the default is that the server refuses to rewrite an existing file
-            err(f'file {path} already exist, returning 403 (see --force)')
-            return '', 403
-    else:
-        dir = os.path.dirname(path)
-        if not os.path.exists(dir):
-            inf('constructing new path %s' % dir)
-            Path(dir).mkdir(parents=True, exist_ok=True)
-
     try:
-        # chunked upload, start the file and then append chunks
         range = request.environ['HTTP_CONTENT_RANGE']
-
-        if range.startswith('bytes 0-'):
-            open(path, 'w').close()
-            inf(f'writing file "{path}"')
-
-        with open(path, "ab") as fp:
-            fp.write(request.data)
+        parsed_ranges = re.search(r'bytes (\d*)-(\d*)\/(\d*)', range)
+        _from, _to, _size = [int(x) for x in parsed_ranges.groups()]
+        deb(f'chunked upload, {_from} to {_to} ({_size}), {_to - _from + 1} bytes')
     except:
+        range = None
+
+    if not range or _from == 0:
+        if os.path.exists(path):
+            if not force:
+                # if force was not given then the default is that the server refuses to rewrite an existing file
+                err(f'file {path} already exist, returning 403 (see --force)')
+                return '', 403
+        else:
+            dir = os.path.dirname(path)
+            if not os.path.exists(dir):
+                inf('constructing new path %s' % dir)
+                Path(dir).mkdir(parents=True, exist_ok=True)
+
+    if range:
+        if _from == 0:
+            try:
+                if chunked_file_handle.get(path):
+                    err('internal error in upload, non closed filehandle')
+                    chunked_file_handle(path).close()
+                open(path, 'w').close()
+                chunked_file_handle[path] = open(path, "ab")
+            except:
+                pass
+
+            inf(f'writing file "{path}" ({human_file_size(_size)})')
+
+        chunked_file_handle[path].write(request.data)
+
+        if _to == _size - 1:
+            inf(f'{path} transfer complete')
+            chunked_file_handle[path].close()
+            del chunked_file_handle[path]
+
+    else:
         # ordinary non-chunked upload, single write
         inf(f'writing file "{path}"')
         with open(path, "wb") as fp:
