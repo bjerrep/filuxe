@@ -5,7 +5,6 @@ from flask import Flask, request, abort, jsonify, send_from_directory,\
     render_template, Response, stream_with_context
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.utils import safe_join
 from flask_restful import inputs
 from errorcodes import ErrorCode
 from pathlib import Path
@@ -14,12 +13,18 @@ from functools import wraps
 import urllib3
 urllib3.disable_warnings()
 
+try:
+    from werkzeug.utils import safe_join
+except:
+    # older installations
+    from flask import safe_join
 
 app = Flask(__name__)
 auth = HTTPBasicAuth()
 
 users = {}
 chunked_file_handle = {}
+
 
 def require_write_key(fn):
     @wraps(fn)

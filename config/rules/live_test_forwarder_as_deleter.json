@@ -8,7 +8,7 @@
             "max_files": 1,
             "exclude": ["unversioned_..zip"],
             "version": ".*?:(\\d+.\\d+.\\d+):.*?",
-            "group": ["(.*?)\\:\\d+\\.\\d+\\.\\d+\\:(.*)"],
+            "group": [".*\\:0.0.0\\:.*", "(.*?)\\:\\d+\\.\\d+\\.\\d+\\:(.*)"],
             "delete_by": "version"
         },
         "second": {

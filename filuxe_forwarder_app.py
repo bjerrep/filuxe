@@ -1,26 +1,23 @@
-import threading
-import time
-
+import os, copy, signal, json, threading, time
+import asyncio, pyinotify
+import requests
 from log import deb, inf, war, err, die, human_file_size, Indent
 from errorcodes import ErrorCode
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, DirCreatedEvent
-from watchdog.events import FileDeletedEvent
-import requests
 import filuxe_api
 import fwd_util, fwd_file_deleter
-import os, copy, signal, json
+
 
 scan = {}
-loaded_rules = None
-active_rules = None
-observer = None
-file_root = None
-filuxe_wan = None
-filuxe_lan = None
-config = None
-lan_file_deleter = None
-idle_detect = None
+LOADED_RULES = None
+ACTIVE_RULES = None
+LOOP = None
+WATCH_MANAGER = None
+FILE_ROOT = None
+FILUXE_WAN = None
+FILUXE_LAN = None
+CONFIG = None
+LAN_FILE_DELETER = None
+IDLE_DETECT = None
 
 
 def calculate_rules(check_dirs):
@@ -31,18 +28,18 @@ def calculate_rules(check_dirs):
     2: check_dirs as directory
     This can set rules on a new directory. If the directory already has rules assigned then it is a no-op.
     """
-    global loaded_rules, active_rules
+    global LOADED_RULES, ACTIVE_RULES
 
-    if not loaded_rules:
-        active_rules = None
+    if not LOADED_RULES:
+        ACTIVE_RULES = None
         return
 
     inf('calculating rules')
     with Indent() as _:
 
-        default_rule = loaded_rules["default"]
+        default_rule = LOADED_RULES["default"]
         try:
-            dir_rules = loaded_rules["dirs"]
+            dir_rules = LOADED_RULES["dirs"]
             entry_rules_json = json.dumps(dir_rules, sort_keys=True)
         except:
             war('no "dir" rules file section found, using "default" section only')
@@ -53,7 +50,7 @@ def calculate_rules(check_dirs):
             new_rules = {}
         else:
             check_dirs = [check_dirs]
-            new_rules = copy.deepcopy(active_rules['dirs'])
+            new_rules = copy.deepcopy(ACTIVE_RULES['dirs'])
 
         try:
             for _key in check_dirs:
@@ -94,27 +91,25 @@ def calculate_rules(check_dirs):
         new_rules_json = json.dumps(active_new_rules, sort_keys=True)
         changed = entry_rules_json != new_rules_json
 
-        extras = ''
         if changed:
-            active_rules = active_new_rules
+            ACTIVE_RULES = active_new_rules
             extras = '. Rules were adjusted'
         else:
             extras = '. No changes ?'
 
-    inf(f'rules calculated, {len(active_rules["dirs"])} active rules{extras}')
+    inf(f'rules calculated, {len(ACTIVE_RULES["dirs"])} active rules{extras}')
 
 
 def dump_rules():
     try:
-        if not active_rules['dirs'].items():
+        if not ACTIVE_RULES['dirs'].items():
             war('this forwarder has no rules loaded ? Forwarding everything.')
         else:
             deb('dumping rules:')
-            for _path, _rules in active_rules['dirs'].items():
+            for _path, _rules in ACTIVE_RULES['dirs'].items():
                 deb(f' "{_path}" {_rules}')
     except:
         war('no dir rules found')
-        pass
 
 
 def export_file(filepath):
@@ -123,16 +118,16 @@ def export_file(filepath):
         If the include regex and the exclude regex are both empty strings then
         the file is exported.
     """
-    if not filuxe_wan:
+    if not FILUXE_WAN:
         return
 
     path = os.path.dirname(filepath)
-    relpath = os.path.relpath(path, file_root)
+    relpath = os.path.relpath(path, FILE_ROOT)
 
     file = os.path.basename(filepath)
 
     try:
-        dir_rules = active_rules['dirs'][relpath]
+        dir_rules = ACTIVE_RULES['dirs'][relpath]
         if not fwd_util.filename_is_included(file, dir_rules):
             inf(f'filename {file} is not in scope and will not be exported')
             return
@@ -141,8 +136,8 @@ def export_file(filepath):
         inf(f'from {relpath} uploading file {file} (no rules)')
 
     try:
-        deb(f'uploading {filuxe_lan.log_path(filepath)}')
-        filuxe_wan.upload(filepath, os.path.join(relpath, file))
+        deb(f'uploading {FILUXE_LAN.log_path(filepath)}')
+        FILUXE_WAN.upload(filepath, os.path.join(relpath, file))
     except requests.ConnectionError:
         war('upload failed, WAN server is not reachable.')
     except FileNotFoundError:
@@ -154,13 +149,15 @@ def delete_wan_file(filepath):
     Delete file on WAN if WAN is configured. This will be triggered when a file is
     deleted from LAN filestorage.
     """
-    if not filuxe_wan:
+    if not FILUXE_WAN:
+        deb(f'no wan configured, not deleting {filepath} on wan')
         return
 
-    path = os.path.dirname(filepath)
+    filestorage_path = os.path.relpath(filepath, FILUXE_LAN.root())
+    path = os.path.dirname(filestorage_path)
 
     try:
-        if not active_rules['dirs'][path]['delete']:
+        if not ACTIVE_RULES['dirs'][path]['delete']:
             deb(f'not deleting on wan since delete=false for {filepath}')
             return
     except:
@@ -168,15 +165,15 @@ def delete_wan_file(filepath):
 
     try:
         file = os.path.basename(filepath)
-        relpath = os.path.normpath(path)
-        dir_rules = active_rules['dirs'][relpath]
+        rule_path = os.path.normpath(path)
+        dir_rules = ACTIVE_RULES['dirs'][rule_path]
         if not fwd_util.filename_is_included(file, dir_rules):
             inf(f'filename {file} is not in scope and will not be exported')
             return
     except:
-        deb(f'from "{filuxe_wan.log_path(relpath)}" deleting file {file} (no rules)')
+        deb(f'from "{FILUXE_WAN.log_path(filepath)}" deleting file {file} (no rules)')
 
-    fwd_util.delete_http_file(filuxe_wan, filepath)
+    fwd_util.delete_http_file(FILUXE_WAN, filestorage_path)
 
 
 def print_file_list(files, title=None):
@@ -188,6 +185,26 @@ def print_file_list(files, title=None):
         fwd_util.print_file(item)
 
 
+def new_file(filename):
+    if not os.path.exists(filename):
+        deb(f'listener: changed file "{filename}" does not exist anymore?')
+        return
+
+    inf(f'listener: new/changed file "{FILUXE_LAN.log_path(filename)}"')
+
+    with Indent() as _:
+        if LAN_FILE_DELETER:
+            path = os.path.dirname(filename)
+            filestorage_path = os.path.relpath(path, FILUXE_LAN.root())
+            LAN_FILE_DELETER.enforce_max_files(filestorage_path, rules=LOADED_RULES, recursive=False)
+
+        if not os.path.exists(filename):
+            war(f'listener: new file "{FILUXE_LAN.log_path(filename)}" already deleted and will not be forwarded')
+            return
+
+        export_file(filename)
+
+
 class IdleDetect(threading.Thread):
     """
     Initially made to facilitate testing with pexpect but now its just nice
@@ -195,93 +212,89 @@ class IdleDetect(threading.Thread):
     """
     def __init__(self):
         threading.Thread.__init__(self)
-        self.timeout = 2
+        self.modified_files = {}
+        self.idle_timeout = 3
+        self.timeout = self.idle_timeout
         self.daemon = True
         self.start()
 
     def activity(self):
-        self.timeout = 2
+        self.timeout = self.idle_timeout
 
     def run(self):
         while True:
             time.sleep(1)
-            if self.timeout >= 0:
+            if self.timeout:
                 self.timeout -= 1
-                if self.timeout == -1:
+                if not self.timeout:
                     inf('idle')
 
 
-class Listener(FileSystemEventHandler):
-    def on_any_event(self, event):
-        idle_detect.activity()
+class EventHandler(pyinotify.ProcessEvent):
+    def process_default(self, event):
+        print(event)
 
-    def new_file(self, filename):
-        if not os.path.exists(filename):
-            deb(f'listener: changed file "{filename}" does not exist anymore?')
-            return
+    def process_IN_CLOSE_WRITE(self, event):
+        deb(f'inotify: closed {event.pathname}')
+        new_file(event.pathname)
+        IDLE_DETECT.activity()
 
-        inf(f'listener: new/changed file "{filuxe_lan.log_path(filename)}"')
+    def process_IN_DELETE(self, event):
+        deb(f'inotify: delete {event.pathname}')
+        delete_wan_file(event.pathname)
+        IDLE_DETECT.activity()
 
-        with Indent() as _:
-            path = os.path.dirname(filename)
-            filestorage_path = os.path.relpath(path, filuxe_lan.root())
-            lan_file_deleter.enforce_max_files(filestorage_path)
-            if not os.path.exists(filename):
-                war(f'listener: new file "{filuxe_lan.log_path(filename)}" already deleted and will not be forwarded')
-                return
-            export_file(filename)
+    def process_IN_MOVED_FROM(self, event):
+        deb(f'inotify: move(delete) {event.pathname}')
+        delete_wan_file(event.pathname)
+        IDLE_DETECT.activity()
 
-    def on_closed(self, event):
-        self.new_file(event.src_path)
+    def process_IN_MOVED_TO(self, event):
+        deb(f'inotify: move(write) {event.pathname}')
+        new_file(event.pathname)
+        IDLE_DETECT.activity()
 
-    def on_created(self, event):
-        if isinstance(event, DirCreatedEvent):
-            src_path = os.path.relpath(event.src_path, file_root)
-            inf(f'listener: new dir {src_path}')
-            calculate_rules(src_path)
-
-    def on_deleted(self, event):
-        path = os.path.relpath(event.src_path, file_root)
-        inf(f'listener: file was deleted: {filuxe_lan.log_path(event.src_path)}"')
-        with Indent() as _:
-            if filuxe_wan:
-                if isinstance(event, FileDeletedEvent):
-                    delete_wan_file(path)
-                else:
-                    inf(f'listener: deleted directory "{path}" (no action)')
+    def process_IN_CREATE(self, event):
+        if event.dir:
+            inf(f'new directory "{FILUXE_LAN.log_path(event.pathname)}"')
+            path = os.path.relpath(event.pathname, FILUXE_LAN.root())
+            calculate_rules(path)
+        else:
+            inf(f'new file "{FILUXE_LAN.log_path(event.pathname)}"')
+            new_file(event.pathname)
 
 
 def run_filesystem_observer(root):
-    global observer
+    global LOOP, WATCH_MANAGER
     inf(f'starting file observer in {root}')
-    observer = Observer()
-    listener = Listener()
-    observer.schedule(listener, root, recursive=True)
-    observer.start()
+
+    LOOP = asyncio.get_event_loop()
+    WATCH_MANAGER = pyinotify.WatchManager()
+    pyinotify.AsyncioNotifier(WATCH_MANAGER, LOOP, default_proc_fun=EventHandler())
+    mask = pyinotify.IN_CLOSE_WRITE | pyinotify.IN_DELETE | pyinotify.IN_MOVED_FROM | pyinotify.IN_MOVED_TO
+    WATCH_MANAGER.add_watch(root, mask, rec=True, auto_add=True)
+
     signal.signal(signal.SIGINT, terminate)
     signal.signal(signal.SIGTERM, terminate)
 
 
-def coldstart_rules():
-    dirs = fwd_util.filestorage_directory_scan(file_root)
+def coldstart_rules(lan_files):
+    dirs = list(lan_files['filelist'].keys())
     calculate_rules(dirs)
     dump_rules()
 
 
 def terminate(_, __):
-    observer.stop()
+    LOOP.call_soon_threadsafe(LOOP.stop)
 
 
-def synchonize(cfg):
+def synchonize(lan_files):
     inf('synchonizing with WAN server, please wait')
 
     with Indent() as _:
-        # at its core then lan here just mean 'the local filesystem'.
-        lan_files = fwd_util.get_local_filelist(filuxe_lan.root())
-
         # If the WAN server is missing then the forwarder will not be able to do its job before
         # the WAN server can be reached.
-        wan_files = fwd_util.get_http_filelist(filuxe_wan, rules=active_rules)
+        wan_files = fwd_util.get_http_filelist(FILUXE_WAN, rules=ACTIVE_RULES)
 
         if lan_files is None or wan_files is None:
             war('retrieving filelists failed, synchonization aborted')
@@ -315,73 +328,78 @@ def synchonize(cfg):
             inf(f'synchonizing: uploading {human_file_size(copy_bytes)} in {len(new_files)} new files '
                 f'and {len(modified_files)} modified files')
             for file in new_files + modified_files:
-                export_file(os.path.join(file_root, file))
+                export_file(os.path.join(FILE_ROOT, file))
             inf('synchonizing: complete')
 
 
-def generate_default_rules():
-    return None
+def start(args, cfg, rules):
+    global LOADED_RULES, FILE_ROOT, FILUXE_WAN, FILUXE_LAN, CONFIG, LAN_FILE_DELETER, IDLE_DETECT
+    lan_files = None
 
+    FILE_ROOT = cfg['lan_filestorage']
 
-def start(args, cfg, _rules):
-    global loaded_rules, file_root, filuxe_wan, filuxe_lan, config, lan_file_deleter, idle_detect
+    if not os.path.exists(FILE_ROOT):
+        die(f'filestorage root {FILE_ROOT} not found. Giving up')
 
-    file_root = cfg['lan_filestorage']
-    inf('filestorage root %s' % file_root)
+    inf(f'filestorage root {FILE_ROOT}')
 
-    config = cfg
-    if _rules:
-        loaded_rules = _rules
-        coldstart_rules()
+    CONFIG = cfg
+    if rules:
+        LOADED_RULES = rules
+        lan_files = fwd_util.get_local_filelist(FILE_ROOT)
+        coldstart_rules(lan_files)
     else:
-        loaded_rules = generate_default_rules()
         war('running with default rules, forwarding everything')
 
     try:
-        filuxe_wan = filuxe_api.Filuxe(config, lan=False, force=True)
+        FILUXE_WAN = filuxe_api.Filuxe(CONFIG, lan=False, force=True)
     except:
         war('no wan configuration found, forwarding disabled')
 
-    if filuxe_wan:
+    if FILUXE_WAN:
         try:
-            error, stats = filuxe_wan.get_stats()
+            _, stats = FILUXE_WAN.get_stats()
             inf(f'connected to wan server version {stats["version"]}')
         except:
             err('wan server unreachable, forwarding disabled')
-            filuxe_wan = None
+            FILUXE_WAN = None
 
     try:
-        filuxe_lan = filuxe_api.Filuxe(config, lan=True)
+        FILUXE_LAN = filuxe_api.Filuxe(CONFIG, lan=True)
     except:
         die('no lan configuration found, can\'t continue')
 
     try:
-        error, stats = filuxe_lan.get_stats()
+        _, stats = FILUXE_LAN.get_stats()
         inf(f'connected to lan server version {stats["version"]}')
     except requests.exceptions.ConnectionError:
         war('lan server unreachable, continuing anyway')
     except Exception as e:
         die('unexpected exception while contacting lan server', e)
 
-    lan_file_deleter = fwd_file_deleter.FileDeleter(filuxe_lan, active_rules, args.dryrun)
-    lan_file_deleter.enforce_max_files('', recursive=True)
+    if ACTIVE_RULES:
+        LAN_FILE_DELETER = fwd_file_deleter.FileDeleter(FILUXE_LAN, args.dryrun)
+        LAN_FILE_DELETER.enforce_max_files('', rules=ACTIVE_RULES, recursive=True, lan_files=lan_files)
 
     try:
-        if filuxe_wan and cfg['sync_at_startup']:
-            synchonize(cfg)
-    except:
-        inf('syncronizing lan to wan failed')
-
-    idle_detect = IdleDetect()
-    try:
-        run_filesystem_observer(file_root)
+        if FILUXE_WAN and cfg['sync_at_startup']:
+            if not lan_files:
+                lan_files = fwd_util.get_local_filelist(FILE_ROOT)
+            synchonize(lan_files)
     except Exception as e:
-        die(f'unable to start file observer in {file_root}', e)
+        err(f'syncronizing lan to wan failed {e}')
+
+    IDLE_DETECT = IdleDetect()
+    try:
+        run_filesystem_observer(FILE_ROOT)
+    except Exception as e:
+        die(f'unable to start file observer in {FILE_ROOT}', e)
 
     inf('filuxe forwarder is ready')
 
     try:
-        observer.join()
+        LOOP.run_forever()
     except Exception as e:
         die('the fileobserver crashed. Perhaps the filestorage was deleted ?', e)
+
     return ErrorCode.OK

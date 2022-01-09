@@ -7,16 +7,11 @@ Installing
 Dependencies
 ============
 
-A couple of python libraries are required. Python version needs to be 3.6+. If installing on ubuntu then 18.04 or above is the best starting point, then the 'python-' part should be 'python3-'.
+A couple of python libraries are required, see ./requirements.txt.
 
-::
+Filuxe has been written on an Arch system with all python dependencies installed as native packages.
 
-    pathlib
-    watchdog
-    flask-restful
-    flask-httpauth
-
-
+Be warned that bringing Filuxe up on e.g. an older Ubuntu with stale python dependencies might be a little challenging.
 
 Reading
 =======

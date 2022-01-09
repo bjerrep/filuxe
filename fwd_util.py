@@ -1,18 +1,14 @@
-import copy
-
+import time, re, os, copy
+import requests
 from log import deb, inf, war, err, human_file_size, Indent
 from errorcodes import ErrorCode
 import util
-import requests
-import time, re, os
-
-last_http_filelist = None
 
 
-def print_file(item):
+def print_file(item, extra=''):
     datetime = time.strftime("%m/%d/%Y %H:%M:%S", time.gmtime(item.attr["time"]))
     human_size = human_file_size(item.attr["size"])
-    deb(f' - {human_size:<10} {item.attr["time"]:<20} {datetime} "{item.file}"')
+    deb(f'{extra} - {human_size:<10} {item.attr["time"]:<20} {datetime} "{item.file}"')
 
 
 def delete_http_file(filuxe_handle, filepath):
@@ -63,31 +59,23 @@ def filename_is_included(filename, rules):
     return True
 
 
-def filter_filelist(filelist, rules, recursive):
-    global last_http_filelist
+def filter_filelist(filelist, rules):
+    """
+    Return a copy of the filelist where not-included and excluded files are removed according to the rule set.
+    """
     try:
         filtered_filelist = copy.deepcopy(filelist)
 
         for path, files in filelist['filelist'].items():
             if not rules['dirs'].get(path):
-                # Got directories from wan that does not exist on lan.
-                inf(f'filter filelist: got path "{path}" which is not found in rules')
+                # Probably got a directory from a wan filelist that does not exist on lan.
+                inf(f'filter filelist: ignoring directory "{path}" which is not found in rules')
             else:
-                for filename, attributes in files.items():
+                for filename in files:
                     if not filename_is_included(filename, rules['dirs'][path]):
-                        try:
-                            if not last_http_filelist['filelist'][path].get(filename):
-                                inf(f'ignoring new file "{path}/{filename}", no rules hit')
-                        except:
-                            pass
                         del filtered_filelist['filelist'][path][filename]
     except:
         deb('http filelist returned unfiltered (bad rules?)')
-
-    if recursive:
-        last_http_filelist = copy.deepcopy(filelist)
-    else:
-        last_http_filelist['filelist'][path] = copy.deepcopy(filelist['filelist'][path])
 
     return filtered_filelist
 
@@ -107,7 +95,7 @@ def get_http_filelist(filuxe_handle, path='/', recursive=True, rules=None):
         if not rules:
             return filelist
 
-        return filter_filelist(filelist, rules, recursive)
+        return filter_filelist(filelist, rules)
 
     except requests.ConnectionError:
         war(f'unable to get file list from {filuxe_handle.domain} over http(s), server unreachable')
@@ -122,7 +110,10 @@ def filestorage_scan(root, path='', recursive=True):
 
     scan_root = os.path.join(root, path)
 
-    inf(f'scanning "{scan_root}"')
+    if recursive:
+        inf(f'recursively scanning "{scan_root}"')
+    else:
+        inf(f'rescanning directory "{scan_root}"')
 
     with Indent() as _:
         for _root, _dirs, _files in os.walk(scan_root):
@@ -150,7 +141,13 @@ def filestorage_scan(root, path='', recursive=True):
             total_directories += 1
             total_files += len(_files)
             total_size += size
-            deb(f'scanned "{relative_path}", {human_file_size(size)} in {len(_files)} files')
+
+            message = f'scanned "{relative_path}", {human_file_size(size)} in {len(_files)} files'
+            if recursive:
+                # If recursive it will be the first full scan so print what is happening
+                inf(message)
+            else:
+                deb(message)
 
             if not recursive:
                 break
@@ -161,10 +158,6 @@ def filestorage_scan(root, path='', recursive=True):
             'info': {'dirs': total_directories, 'fileroot': relative_path, 'files': total_files, 'size': total_size}}
 
 
-def filestorage_directory_scan(root):
-    return list(filestorage_scan(root)['filelist'].keys())
-
-
 def get_local_filelist(root='/', path='', recursive=True, rules=None):
     """
     """
@@ -172,4 +165,4 @@ def get_local_filelist(root='/', path='', recursive=True, rules=None):
     if not rules:
         return filelist
 
-    return filter_filelist(filelist, rules, recursive)
+    return filter_filelist(filelist, rules)

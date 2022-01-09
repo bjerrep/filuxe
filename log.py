@@ -4,20 +4,18 @@
 import logging, sys, traceback, os
 from errorcodes import ErrorCode
 
-_indent = ''
-
 
 class Indent():
+    _indent = ''
+
     def __init__(self):
-        global _indent
-        _indent += '   '
+        Indent._indent += '   '
 
     def __enter__(self):
         pass
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        global _indent
-        _indent = _indent[:-3]
+        Indent._indent = Indent._indent[:-3]
 
 
 RESET = '\033[0m'
@@ -58,7 +56,7 @@ else:
 def deb(msg, newline=True):
     if not newline:
         handler.terminator = ''
-    logger.debug(f'{_indent}{msg}')
+    logger.debug('%s%s', Indent._indent, msg)
     if not newline:
         handler.terminator = '\n'
 
@@ -66,29 +64,29 @@ def deb(msg, newline=True):
 def inf(msg, newline=True):
     if not newline:
         handler.terminator = ''
-    logger.info(f'{_indent}{msg}')
+    logger.info('%s%s', Indent._indent, msg)
     if not newline:
         handler.terminator = '\n'
 
 
 def war(msg):
-    logger.warning(f'{_indent}{msg}')
+    logger.warning('%s%s', Indent._indent, msg)
 
 
 def err(msg):
-    logger.error(f'{_indent}{msg}')
+    logger.error('%s%s', Indent._indent, msg)
 
 
 def die(msg, e=None, error_code=None):
-    if logger.level == logging.DEBUG:
+    if e and logger.level == logging.DEBUG:
         print(traceback.format_exc())
     if error_code:
         exit_code = error_code.value
-        logger.critical(f'now exiting due to critical error \'{ErrorCode.to_string(error_code.value)}\'')
+        logger.critical('now exiting due to critical error \'%s\'', ErrorCode.to_string(error_code.value))
     else:
         exit_code = 1
     if e:
-        logger.critical(f'exception: {str(e)}')
+        logger.critical('exception: %s', str(e))
     logger.critical(msg)
     os._exit(exit_code)
 
@@ -98,3 +96,4 @@ def human_file_size(filesize):
     for label, divisor, digits in sizes:
         if filesize < divisor * 1024 or label == 'GiB':
             return f'{filesize/divisor:.{digits}f} {label}'
+    return 'failed'

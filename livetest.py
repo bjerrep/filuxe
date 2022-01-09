@@ -1,6 +1,10 @@
 #!/usr/bin/env python
+import unittest, json, os
+import sys, io, time, shutil
+import contextlib, requests
+import pexpect
 from config_util import load_config
-import unittest, json, os, pexpect, time, shutil, requests, sys, io, contextlib
+
 
 TEST_DIR = 'test'
 LAN_CONFIG = os.path.join(TEST_DIR, 'test_lan_config.json')
@@ -48,25 +52,25 @@ def delete_file(filename):
     os.remove(filename)
 
 
-def build_test_file_set(root, dir, nof_file_sets, offset):
+def build_test_file_set(root, path, nof_file_sets, offset):
     test_files = []
     for i in range(nof_file_sets):
-        test_files.append(os.path.join(root, dir, f'a:1.0.{i + offset}:root.zip'))
-        test_files.append(os.path.join(root, dir, f'b:1.0.{i + offset}:root.zip'))
-        test_files.append(os.path.join(root, dir, f'unversioned{i + offset}.zip'))
-        test_files.append(os.path.join(root, dir, f'plain{i + offset}.txt'))
+        test_files.append(os.path.join(root, path, f'a:1.0.{i + offset}:root.zip'))
+        test_files.append(os.path.join(root, path, f'b:1.0.{i + offset}:root.zip'))
+        test_files.append(os.path.join(root, path, f'unversioned{i + offset}.zip'))
+        test_files.append(os.path.join(root, path, f'plain{i + offset}.txt'))
     return test_files
 
 
-def write_testfiles(root, dir, nof_file_sets, offset=0):
-    test_files = build_test_file_set(root, dir, nof_file_sets, offset)
+def write_testfiles(root, path, nof_file_sets, offset=0):
+    test_files = build_test_file_set(root, path, nof_file_sets, offset)
     for test_file in test_files:
         write_file(test_file, 'test')
     return test_files
 
 
-def verify_testfiles(root, dir, nof_file_sets, offset=0):
-    test_files = build_test_file_set(root, dir, nof_file_sets, offset)
+def verify_testfiles(root, path, nof_file_sets, offset=0):
+    test_files = build_test_file_set(root, path, nof_file_sets, offset)
     for test_file in test_files:
         if not os.path.exists(test_file):
             return test_file
@@ -77,6 +81,9 @@ class Servers:
     lan_server = None
     wan_server = None
     forwarder = None
+    lan_config = None
+    wan_config = None
+    forwarder_config = None
 
     def __init__(self, clean=True):
         if clean:
@@ -230,7 +237,7 @@ class BasicForwarding(unittest.TestCase):
         --------------------------------------------------------------
         """)
 
-        source_file = os.path.join(TEST_DIR, 'http_upload')
+        source_file = os.path.join(TEST_DIR, 'http_upload.zip')
         write_file(source_file, 'test')
 
         dest_file = 'testpath/upload.zip'

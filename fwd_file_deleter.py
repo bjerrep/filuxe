@@ -1,7 +1,7 @@
-from log import deb, inf, war, err, die
+import re, os
+from log import deb, inf, war, err, die, Indent
 from errorcodes import ErrorCode
 import fwd_util
-import re, os
 
 
 def get_rules_for_path(rules, path):
@@ -91,15 +91,15 @@ class Item:
 
 
 class FileDeleter:
-    def __init__(self, domain, rules, dryrun=True):
+    def __init__(self, domain, dryrun=True):
         self.domain = domain
-        self.rules = rules
         self.dryrun = dryrun
 
-    def delete_files(self, filegroup, group_name, use_http):
+    def delete_files(self, filegroup, group_name, use_http, rules):
         directory = filegroup['directory']
         filelist = filegroup['files']
         to_delete = len(filelist) - filegroup['maxfiles']
+        deleted_files = []
 
         if to_delete > 0:
             delete_by = filegroup["deleteby"]
@@ -107,17 +107,21 @@ class FileDeleter:
             inf(f'deleting {to_delete} files from {self.domain.domain} filestorage, '
                 f'path="{filegroup["directory"]}" group "{group_name}". Deleteby={delete_by}')
 
-            _items = [Item(x, directory, self.rules, delete_by) for x in filelist.items()]
+            _items = [Item(x, directory, rules, delete_by) for x in filelist.items()]
             try:
                 _sorted_items = sorted(_items)
             except:
                 first_filename = list(filelist.keys())[0]
                 war(f'failed running delete by "{delete_by}" in group "{group_name}". Files of type "{first_filename}"')
-                return
+                return deleted_files
 
             deb(f'http filelist sorted by: "{delete_by}", delete from top')
-            for item in _sorted_items:
-                fwd_util.print_file(item)
+            for index, item in enumerate(_sorted_items):
+                if index < to_delete:
+                    extra = 'DEL '
+                else:
+                    extra = 'KEEP'
+                fwd_util.print_file(item, extra)
 
             for item in _sorted_items[:to_delete]:
                 filepath = os.path.join(directory, item.file)
@@ -129,9 +133,13 @@ class FileDeleter:
                             fwd_util.delete_http_file(self.domain, filepath)
                         else:
                             fqn = os.path.join(self.domain.root(), filepath)
+                            inf(f'deleting {self.domain.log_path(fqn)}')
                             os.remove(fqn)
+                            deleted_files.append(item.file)
                     except:
                         war(f'failed to delete file {fqn} (http={use_http})')
+
+        return deleted_files
 
     def parse_into_file_groups(self, directory, filelist, directory_settings):
         file_groups = {}
@@ -149,7 +157,7 @@ class FileDeleter:
                     exit(1)
 
                 if not match:
-                    deb(f'parsing {filename} failed, no regex match')
+                    deb(f'parsing {filename} failed, no regex match with {group}')
                 else:
                     nof_groups = len(match.groups())
                     nof_group_regex_groups = re.compile(group).groups
@@ -180,7 +188,7 @@ class FileDeleter:
 
         return file_groups
 
-    def enforce_max_files(self, path, recursive=True, use_http=False):
+    def enforce_max_files(self, path, rules, recursive=True, use_http=False, lan_files=None):
         """
         Get the list of files (locally or over http) and delete files if required by
         the rule "max_files". It can run a full recursive scan-and-delete as is
@@ -189,16 +197,17 @@ class FileDeleter:
         file (with a path and recursive=False).
         Returns nothing.
         """
-        if not self.rules:
-            return
 
         try:
             deb(f'enforce max files in {self.domain.domain} with path="{path}", dryrun={self.dryrun}')
             if use_http:
-                filelist = fwd_util.get_http_filelist(self.domain, path, recursive, rules=self.rules)
+                filelist = fwd_util.get_http_filelist(self.domain, path, recursive, rules)
             else:
-                scan_directory = self.domain.root()
-                filelist = fwd_util.get_local_filelist(scan_directory, path, recursive, rules=self.rules)
+                if not lan_files:
+                    scan_directory = self.domain.root()
+                    filelist = fwd_util.get_local_filelist(scan_directory, path, recursive, rules)
+                else:
+                    filelist = lan_files
 
             try:
                 directories = filelist['filelist'].keys()
@@ -208,7 +217,7 @@ class FileDeleter:
 
             group_list = {}
             for directory in directories:
-                directory_settings = get_rules_for_path(self.rules, directory)
+                directory_settings = get_rules_for_path(rules, directory)
                 max_files, _delete_by, _file_groups = directory_settings
                 if max_files == -1:
                     inf(f'"{self.domain.domain}/{path}" has no filelimit, skipping.'
@@ -229,11 +238,15 @@ class FileDeleter:
                         message = f'"{self.domain.domain}/{directory}" group:"{group_key}" exceeded max files '\
                                   f'with {excess_files}. ({nof_files} files, limit is {max_files})'
                         inf(message)
-                        self.delete_files(file_group, group_key, use_http)
+                        with Indent() as _:
+                            deleted_files = self.delete_files(file_group, group_key, use_http, rules)
+                            for file in deleted_files:
+                                del filelist['filelist'][directory][file]
+
                     else:
                         message = f'"{self.domain.domain}/{directory}" group:"{group_key}" no action. '\
                                   f'({nof_files} files, limit is {max_files})'
                         deb(message)
 
         except Exception as e:
-            die(f'exception in enforce_max_files {e.__repr__()}', error_code=ErrorCode.INTERNAL_ERROR)
+            die(f'exception in enforce_max_files {e.__repr__()}', e, error_code=ErrorCode.INTERNAL_ERROR)

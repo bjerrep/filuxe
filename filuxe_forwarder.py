@@ -45,12 +45,12 @@ if args.templaterule:
     product_candidate = {"include": "zip,elf"}
     product = {"maxfiles": 2}
     root = {"maxfiles": 10, "export": True}
-    config = {"default": root, "dirs": {
+    CONFIG = {"default": root, "dirs": {
         "product/release/image": product_release_image,
         "product/candidate": product_candidate,
         "product/release": product_release,
         "product": product}}
-    jsn = json.dumps(config, indent=4, sort_keys=True)
+    jsn = json.dumps(CONFIG, indent=4, sort_keys=True)
     print(jsn)
     exit(0)
 
@@ -63,10 +63,10 @@ if args.config:
     except json.decoder.JSONDecodeError as e:
         die(f'json error in {args.config}', e, ErrorCode.FILE_INVALID)
 
-loaded_rules = None
+LOADED_RULES = None
 if args.rules:
     try:
-        loaded_rules = config_util.load_config(args.rules)
+        LOADED_RULES = config_util.load_config(args.rules)
         inf(f'loaded rules file {args.rules}')
     except json.decoder.JSONDecodeError as e:
         die(f'json error in {args.rules}', e, ErrorCode.FILE_INVALID)
@@ -76,7 +76,7 @@ else:
     inf('no rules specified, running with default rules forwarding everything')
 
 try:
-    errcode = filuxe_forwarder_app.start(args, cfg, loaded_rules)
+    errcode = filuxe_forwarder_app.start(args, cfg, LOADED_RULES)
 
     if errcode != ErrorCode.OK:
         die('critical message', errcode)

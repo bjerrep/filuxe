@@ -1,21 +1,25 @@
-import psutil, os
+import os
 
 
 def file_is_closed(fqn):
     """
-    Before returning files as existing at all then make sure it is closed.
-    One problem observed is that a file while being copied can report a
-    timestamp of 'now'. This will make the forwarder delete wrong files
-    if it deletes by date (and is configured to delete files obviously)
-    """
-    for proc in psutil.process_iter():
-        try:
-            for item in proc.open_files():
-                if fqn == item.path:
-                    return False
-        except:
-            pass
+    This method was introduced because a file while being copied was seen to report a timestamp
+    of 'now' before getting the final and correct timestamp from the source file.
+    This could make the forwarder delete wrong files if it deletes by date (and is configured
+    to delete files obviously).
 
+    This method is insanely slow and since the problem seems to have disappeared (perhaps after
+    a change to use pyinotify instead of watchdog?) it is just kept for now as a reminder.
+    """
+
+    # for proc in psutil.process_iter():
+    #     try:
+    #         for item in proc.open_files():
+    #             if fqn == item.path:
+    #                 return False
+    #     except:
+    #         pass
+    #
     return True
 
 

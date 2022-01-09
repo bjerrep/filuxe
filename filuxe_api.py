@@ -1,9 +1,9 @@
-import requests, time, os
+import time, json, os
+import warnings, urllib3, requests
 from log import deb, inf, war, err, die, human_file_size
 from errorcodes import ErrorCode
 from util import chunked_reader, get_file_time
 import config_util
-import warnings, urllib3, json
 
 warnings.simplefilter('ignore', urllib3.exceptions.SecurityWarning)
 
@@ -79,7 +79,8 @@ class Filuxe:
             return ErrorCode.FILE_NOT_FOUND
 
         if force or not os.path.exists(filename):
-            open(filename, 'wb').write(response.content)
+            with open(filename, 'wb') as f:
+                f.write(response.content)
             inf(f'downloaded {url} ({human_file_size(os.path.getsize(filename))}) as "{filename}"')
         else:
             die(f'local file "{filename}" already exists, bailing out (see --force)', ErrorCode.FILE_ALREADY_EXIST)
@@ -105,7 +106,7 @@ class Filuxe:
         inf(f'uploading "{os.path.normpath(filename)}" ({human_file_size(size)}) to {self.domain} server as "{path}"')
 
         if not size:
-            response = requests.post('{}/upload/{}'.format(self.server, path),
+            response = requests.post(f'{self.server}/upload/{path}',
                                      headers={'key': self.write_key},
                                      data='',
                                      params={'time': epoch, 'force': force},
@@ -113,11 +114,10 @@ class Filuxe:
         else:
             try:
                 index = 0
-                offset = 0
 
                 for chunk in chunked_reader(filename):
                     offset = index + len(chunk)
-                    response = requests.post('{}/upload/{}'.format(self.server, path),
+                    response = requests.post(f'{self.server}/upload/{path}',
                                              headers={'key': self.write_key,
                                                       'Content-Type': 'application/octet-stream',
                                                       'Content-length': str(size),
@@ -141,7 +141,7 @@ class Filuxe:
         return ErrorCode.SERVER_ERROR
 
     def delete(self, path):
-        response = requests.get('{}/delete/{}'.format(self.server, path),
+        response = requests.get(f'{self.server}/delete/{path}',
                                 headers={'key': self.write_key},
                                 verify=self.certificate)
         if response.status_code == 200:
@@ -160,7 +160,7 @@ class Filuxe:
         return ErrorCode.OK, response.json()
 
     def list_files(self, path, recursive=False):
-        response = requests.get('{}/filelist/{}'.format(self.server, path),
+        response = requests.get('{self.server}/filelist/{path}',
                                 headers={'key': self.write_key},
                                 params={'recursive': recursive},
                                 verify=self.certificate)

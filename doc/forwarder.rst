@@ -69,6 +69,8 @@ There are some forwarder configuration example files used by the live test in co
 Rules
 ************************************************************
 
+The rules file is needed only if forwarding should be changed from the default 'just forward everything as is' and/or the file deleter should be activated with 'max_files' different from the default implicit value of 'unlimited'.
+
 The rules file is in json and consist of a default section and a list of directories needing special settings. Both entries are optional and the rules file itself is optional as well. The default behavior of the forwarder is that all files are forwarded and that there are no limit for the number of files.
 
 A rules file could look like this:
@@ -97,9 +99,11 @@ A rules file could look like this:
         }
     }
 
+Take care. In the rule set above e.g. the 'max_files' equal 2 in the default section will be the default for all directories found recursively which might lead to a lot of unintended file deletions. Use the --dryrun argument on the forwarder in order to spot any unexpected behaviour, with --dryrun no files will actually be deleted.
+
 Forwarder rules files used by the live test can be found in config/rules and the example above is live_test_forwarder_as_deleter.json. A matching testset with files and that exercises these rules can be found in testdata/filestorage_lan.
 
-Note that the default section is the same as the rule for the root directory meaning that settings here will be default inherited for all directories in the entire directory tree. Rules for a given directory is the rules inherited from the parent directory with any explicit rules in a given directory replacing the rules inherited from the parent. 
+Note that the default section is the same as the rule for the root directory meaning that settings here will be default inherited for all directories in the entire directory tree. Rules for a given directory is the rules inherited from the parent directory with any explicit rules in a given directory -rewriting- the rules inherited from the parent.
 
 **Default rules:**
 
