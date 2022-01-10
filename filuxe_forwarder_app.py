@@ -196,7 +196,7 @@ def new_file(filename):
         if LAN_FILE_DELETER:
             path = os.path.dirname(filename)
             filestorage_path = os.path.relpath(path, FILUXE_LAN.root())
-            LAN_FILE_DELETER.enforce_max_files(filestorage_path, rules=LOADED_RULES, recursive=False)
+            LAN_FILE_DELETER.enforce_max_files(filestorage_path, rules=ACTIVE_RULES, recursive=False)
 
         if not os.path.exists(filename):
             war(f'listener: new file "{FILUXE_LAN.log_path(filename)}" already deleted and will not be forwarded')

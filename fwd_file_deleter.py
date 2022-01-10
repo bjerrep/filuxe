@@ -156,9 +156,7 @@ class FileDeleter:
                     err(f'regex gave exception {e.__repr__()} with regex "{group}"')
                     exit(1)
 
-                if not match:
-                    deb(f'parsing {filename} failed, no regex match with {group}')
-                else:
+                if match:
                     nof_groups = len(match.groups())
                     nof_group_regex_groups = re.compile(group).groups
 

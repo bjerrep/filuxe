@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-import argparse, json, traceback
+import argparse, json, traceback, logging
 from log import logger as log
 from log import inf, die
 from errorcodes import ErrorCode
-import logging, filuxe_forwarder_app, config_util
+import filuxe_forwarder_app, config_util
 
 
 parser = argparse.ArgumentParser('filuxe_forwarder')
@@ -63,10 +63,11 @@ if args.config:
     except json.decoder.JSONDecodeError as e:
         die(f'json error in {args.config}', e, ErrorCode.FILE_INVALID)
 
-LOADED_RULES = None
+rules = None
+
 if args.rules:
     try:
-        LOADED_RULES = config_util.load_config(args.rules)
+        rules = config_util.load_config(args.rules)
         inf(f'loaded rules file {args.rules}')
     except json.decoder.JSONDecodeError as e:
         die(f'json error in {args.rules}', e, ErrorCode.FILE_INVALID)
@@ -76,7 +77,7 @@ else:
     inf('no rules specified, running with default rules forwarding everything')
 
 try:
-    errcode = filuxe_forwarder_app.start(args, cfg, LOADED_RULES)
+    errcode = filuxe_forwarder_app.start(args, cfg, rules)
 
     if errcode != ErrorCode.OK:
         die('critical message', errcode)
