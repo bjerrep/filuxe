@@ -86,7 +86,7 @@ def die(msg, e=None, error_code=None):
     else:
         exit_code = 1
     if e:
-        logger.critical('exception: %s', str(e))
+        logger.critical('exception: %s', e.__repr__())
     logger.critical(msg)
     os._exit(exit_code)
 

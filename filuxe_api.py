@@ -83,7 +83,8 @@ class Filuxe:
                 f.write(response.content)
             inf(f'downloaded {url} ({human_file_size(os.path.getsize(filename))}) as "{filename}"')
         else:
-            die(f'local file "{filename}" already exists, bailing out (see --force)', ErrorCode.FILE_ALREADY_EXIST)
+            die(f'local file "{filename}" already exists, bailing out (see --force)',
+                error_code=ErrorCode.FILE_ALREADY_EXIST)
         return ErrorCode.OK
 
     def upload(self, filename, path=None, touch=False, force=False):
@@ -159,10 +160,19 @@ class Filuxe:
             return ErrorCode.OK, json.dumps(response.json(), indent=4)
         return ErrorCode.OK, response.json()
 
-    def list_files(self, path, recursive=False):
-        response = requests.get('{self.server}/filelist/{path}',
-                                headers={'key': self.write_key},
-                                params={'recursive': recursive},
-                                verify=self.certificate)
-        jsn = response.json()
-        return ErrorCode.OK, list(jsn['filelist'][path].keys())
+    def filelist(self, path, recursive=False):
+        error_code, jsn = self.list(path, recursive=recursive)
+        if error_code != ErrorCode.OK:
+            return error_code, jsn
+        result = []
+        for directory, filelist in jsn['filelist'].items():
+            for filename in filelist:
+                result.append(os.path.join(directory, filename))
+        return ErrorCode.OK, result
+
+    def dirlist(self, path, recursive=False):
+        error_code, jsn = self.list(path, recursive=recursive)
+        if error_code != ErrorCode.OK:
+            return error_code, jsn
+        result = jsn['dirlist']
+        return ErrorCode.OK, result

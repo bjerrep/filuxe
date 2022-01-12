@@ -18,6 +18,8 @@ parser.add_argument('--list', action='store_true',
                     help='get list of files and directories as json. See --pretty and --recursive')
 parser.add_argument('--filelist', action='store_true',
                     help='get raw list of files. See --recursive')
+parser.add_argument('--dirlist', action='store_true',
+                    help='get raw list of directories. See --recursive')
 
 parser.add_argument('--recursive', action='store_true',
                     help='get recursive --list')
@@ -67,18 +69,32 @@ try:
 
     try:
         if args.download:
+            if not args.file or not args.path:
+                die('need both a --path and a --file argument', ErrorCode.BAD_ARGUMENTS)
             error_code = filuxe.download(args.file, args.path, args.force)
         elif args.upload:
+            if not args.file or not args.path:
+                die('need both a --path and a --file argument', ErrorCode.BAD_ARGUMENTS)
             error_code = filuxe.upload(args.file, args.path, args.touch, args.force)
         elif args.delete:
             error_code = filuxe.delete(args.path)
         elif args.list:
-            error_code, list = filuxe.list(args.path, args.pretty, args.recursive)
-            print(list)
+            error_code, jsn = filuxe.list(args.path, args.pretty, args.recursive)
+            if error_code != ErrorCode.OK:
+                die(f'failed with error {error_code} : "{jsn}"')
+            print(jsn)
         elif args.filelist:
-            error_code, file_list = filuxe.list_files(args.path, args.recursive)
-            for name in file_list:
-                print(name)
+            error_code, list = filuxe.filelist(args.path, args.recursive)
+            if error_code != ErrorCode.OK:
+                die(f'failed with error {error_code} : "{list}"')
+            for file in list:
+                print(file)
+        elif args.dirlist:
+            error_code, list = filuxe.dirlist(args.path, args.recursive)
+            if error_code != ErrorCode.OK:
+                die(f'failed with error {error_code} : "{list}"')
+            for directory in list:
+                print(directory)
         else:
             die('seems that you didnt really tell me what to do ?', ErrorCode.BAD_ARGUMENTS)
     except requests.exceptions.ConnectionError:

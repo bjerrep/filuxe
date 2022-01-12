@@ -1,14 +1,14 @@
-from log import deb, inf, war, err, die, human_file_size
-from util import chunked_reader, file_is_closed, get_file_time
 import os, re
+from pathlib import Path
+from functools import wraps
 from flask import Flask, request, abort, jsonify, send_from_directory,\
     render_template, Response, stream_with_context
 from flask_httpauth import HTTPBasicAuth
-from werkzeug.security import generate_password_hash, check_password_hash
 from flask_restful import inputs
+from werkzeug.security import generate_password_hash, check_password_hash
+from log import deb, inf, war, err, die, human_file_size
+from util import chunked_reader, file_is_closed, get_file_time
 from errorcodes import ErrorCode
-from pathlib import Path
-from functools import wraps
 
 import urllib3
 urllib3.disable_warnings()
@@ -24,6 +24,9 @@ auth = HTTPBasicAuth()
 
 users = {}
 chunked_file_handle = {}
+
+with open('version.txt') as f:
+    filuxe_server_version = f.read().strip()
 
 
 def require_write_key(fn):
@@ -55,11 +58,8 @@ def index():
 
 @app.route('/stats')
 def route_stats():
-    with open('version.txt') as f:
-        version = f.read().strip()
-
     return {
-        'version': version
+        'version': filuxe_server_version
     }, 200
 
 
@@ -89,31 +89,31 @@ def route_upload(path):
         abort(404)
 
     try:
-        range = request.environ['HTTP_CONTENT_RANGE']
-        parsed_ranges = re.search(r'bytes (\d*)-(\d*)\/(\d*)', range)
+        content_range = request.environ['HTTP_CONTENT_RANGE']
+        parsed_ranges = re.search(r'bytes (\d*)-(\d*)\/(\d*)', content_range)
         _from, _to, _size = [int(x) for x in parsed_ranges.groups()]
         deb(f'chunked upload, {_from} to {_to} ({_size}), {_to - _from + 1} bytes')
     except:
-        range = None
+        content_range = None
 
-    if not range or _from == 0:
+    if not content_range or _from == 0:
         if os.path.exists(path):
             if not force:
                 # if force was not given then the default is that the server refuses to rewrite an existing file
                 err(f'file {path} already exist, returning 403 (see --force)')
                 return '', 403
         else:
-            dir = os.path.dirname(path)
-            if not os.path.exists(dir):
-                inf('constructing new path %s' % dir)
-                Path(dir).mkdir(parents=True, exist_ok=True)
+            directory = os.path.dirname(path)
+            if not os.path.exists(directory):
+                inf(f'constructing new path {directory}')
+                Path(directory).mkdir(parents=True, exist_ok=True)
 
-    if range:
+    if content_range:
         if _from == 0:
             try:
                 if chunked_file_handle.get(path):
                     err('internal error in upload, non closed filehandle')
-                    chunked_file_handle(path).close()
+                    chunked_file_handle[path].close()
                 open(path, 'w').close()
                 chunked_file_handle[path] = open(path, "ab")
             except:
@@ -160,9 +160,12 @@ def route_delete(path):
 def list_files(path):
     recursive = request.args.get('recursive', type=inputs.boolean, default=False)
     path = safe_join(os.path.join(app.config['fileroot'], path))
+    if not os.path.exists(path):
+        err(f'filelist failed, path not found "{path}"')
+        return 'path not found', 404
     fileroot = os.path.join(app.config['fileroot'], '')
-    result = {}
-    nof_dirs = 0
+    file_result = {}
+    dir_result = []
     nof_files = 0
 
     for _root, dirs, _files in os.walk(path):
@@ -172,12 +175,14 @@ def list_files(path):
                 war(f'skipping {p} since it is busy')
                 continue
             relative = os.path.relpath(_root, fileroot)
-            if not result.get(relative):
-                result[relative] = {}
-                nof_dirs += 1
-            result[relative][file] = {'size': os.path.getsize(p), 'time': get_file_time(p)}
+            if not file_result.get(relative):
+                file_result[relative] = {}
+            file_result[relative][file] = {'size': os.path.getsize(p), 'time': get_file_time(p)}
 
-        nof_dirs += len(dirs)
+        for directory in dirs:
+            rel_path = os.path.join(os.path.relpath(_root, fileroot), directory)
+            dir_result.append(os.path.normpath(rel_path))
+
         nof_files += len(_files)
 
         if not recursive:
@@ -185,9 +190,14 @@ def list_files(path):
 
     extra = "(recursive)" if recursive else ""
 
-    inf(f'returning filelist at "{path}", {nof_files} files and {nof_dirs} directories. {extra}')
+    inf(f'returning filelist at "{path}", {nof_files} files and {len(dir_result)} directories. {extra}')
 
-    ret = {'info': {'fileroot': fileroot, 'files': nof_files, 'dirs': nof_dirs}, 'filelist': result}
+    ret = {'info':
+               {
+                   'fileroot': fileroot, 'files': nof_files, 'dirs': len(dir_result)
+               },
+           'filelist': file_result,
+           'dirlist': dir_result}
     return jsonify(ret)
 
 
@@ -197,7 +207,7 @@ def get_server_status(path):
         return jsonify({'status': 'ready'})
 
 
-def start(args, cfg):
+def start(_, cfg):
     global users
     try:
         file_root = cfg['wan_filestorage']
@@ -222,8 +232,7 @@ def start(args, cfg):
         try:
             os.makedirs(file_root)
         except:
-            die('unable to create file root %s, please make it yourself and fix permissions' %
-                file_root,
+            die(f'unable to create file root {file_root}, please make it yourself and fix permissions',
                 ErrorCode.SERVER_ERROR)
 
     app.config['fileroot'] = file_root
@@ -240,7 +249,8 @@ def start(args, cfg):
     except:
         inf('HTTP-AUTH disabled')
 
-    inf(f'{realm} server running at http{"s" if ssl_context else ""}://{host}:{port}. Filestorage root {file_root}')
+    inf(f'filuxe {realm} server {filuxe_server_version} running at http{"s" if ssl_context else ""}://{host}:{port}')
+    inf(f'filestorage root "{file_root}"')
 
     if ssl_context:
         app.run(host=host, port=port, ssl_context=ssl_context)
