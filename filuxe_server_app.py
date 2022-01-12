@@ -58,9 +58,10 @@ def index():
 
 @app.route('/stats')
 def route_stats():
-    return {
+    stats = {
         'version': filuxe_server_version
-    }, 200
+    }
+    return jsonify(stats), 200
 
 
 @app.route('/download/<path:path>')
